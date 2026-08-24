@@ -78,11 +78,54 @@ function parseLiveInput(input) {
 }
 
 // ============================================================
+// 生成抖音反风控 Cookie（msToken + ttwid）
+// ============================================================
+function genDouyinCookie() {
+  const now = Date.now();
+  const randStr = Math.random().toString(36).substring(2, 34);
+  const msToken = randStr;
+  // ttwid 格式：1|时间戳|1|0|1|签名
+  const ttwid = '1%7C' + now + '%7C1%7C0%7C1%7C' + Math.random().toString(36).substring(2, 18);
+  return 'msToken=' + msToken + '; ttwid=' + ttwid + '; IsDouyinOpen=false; s_v_web_id=verify_' + randStr.substring(0, 20);
+}
+
+// ============================================================
+// 抖音专用请求（带完整浏览器指纹 + 动态 Cookie）
+// ============================================================
+async function douyinGet(urlStr) {
+  const headers = {
+    'User-Agent': UA,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept-Language': 'zh-CN,zh;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Referer': 'https://live.douyin.com/',
+    'sec-ch-ua': '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="24"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'document',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-site': 'same-origin',
+    'sec-fetch-user': '?1',
+    'Upgrade-Insecure-Requests': '1',
+    'Cookie': genDouyinCookie()
+  };
+  try {
+    const resp = await fetch(urlStr, { headers: headers, redirect: 'follow' });
+    const body = await resp.text();
+    return { body: body, statusCode: resp.status, finalUrl: resp.url || urlStr };
+  } catch (e) {
+    return { body: '', statusCode: 0, finalUrl: urlStr };
+  }
+}
+
+// ============================================================
 // 解析抖音短链 / 抖音号 / 用户主页 → 真实 room_id（多级兜底）
 // ============================================================
 async function resolveDouyinRoomId(shortUrl) {
   const loadUrl = /^https?:\/\//.test(shortUrl) ? shortUrl : 'https://' + shortUrl;
-  const resp = await httpGet(loadUrl, { headers: { 'Cookie': 'msToken=; ttwid=1|' + Date.now() + '|1|0|1' } });
+  const resp = await douyinGet(loadUrl);
   const finalUrl = resp.finalUrl || loadUrl;
   const html = resp.body || '';
 
@@ -101,26 +144,97 @@ async function resolveDouyinRoomId(shortUrl) {
 }
 
 // ============================================================
-// 抖音页面解析（新版 RSC 转义 JSON）
+// 抖音页面解析（多重兜底方案）
 // ============================================================
 function parseDouyinRoom(html) {
-  const marker = '\\"room\\":{\\"id_str\\"';
-  const idx = html.indexOf(marker);
-  if (idx < 0) return null;
-  let seg = html.substring(idx, idx + 8000);
-  seg = seg.replace(/\\"/g, '"').replace(/\\\//g, '/').replace(/\\n/g, '');
+  if (!html || html.length < 1000) return null;
+
+  // 方案1：新版 RSC 转义 JSON（id_str marker）
+  const marker1 = '\\"room\\":{\\"id_str\\"';
+  let idx = html.indexOf(marker1);
+  if (idx >= 0) {
+    let seg = html.substring(idx, idx + 12000);
+    seg = seg.replace(/\\"/g, '"').replace(/\\\//g, '/').replace(/\\n/g, '');
+    const result = extractRoomFromJson(seg);
+    if (result && result.status !== null) return result;
+  }
+
+  // 方案2：直接找 "room":  非转义的 JSON 块
+  const marker2 = '"room":{';
+  idx = html.indexOf(marker2);
+  if (idx >= 0) {
+    let seg = html.substring(idx, idx + 12000);
+    const result = extractRoomFromJson(seg);
+    if (result && result.status !== null) return result;
+  }
+
+  // 方案3：从 window.__INIT_PROPS__ 或 RENDER_DATA 中提取
+  const initProps = html.match(/window\.__INIT_PROPS__\s*=\s*(\{.*?\})\s*;\s*</);
+  if (initProps) {
+    try {
+      const data = JSON.parse(initProps[1]);
+      const roomInfo = findRoomInObject(data);
+      if (roomInfo) return roomInfo;
+    } catch (e) {}
+  }
+
+  // 方案4：从 SSR 数据中提取（兜底：正则直接抓关键字段）
+  const statusM = html.match(/"status"\s*:\s*(\d+)/);
+  const titleM = html.match(/"title"\s*:\s*"([^"]{0,100})"/);
+  const nickM = html.match(/"nickname"\s*:\s*"([^"]{0,60})"/);
+  const avatarM = html.match(/"avatar_thumb"\s*:\s*\{[^}]*?"url_list"\s*:\s*\["([^"]+)"/);
+  const webRidM = html.match(/"web_rid"\s*:\s*"(\d+)"/);
+
+  if (statusM || titleM || nickM) {
+    return {
+      status: statusM ? parseInt(statusM[1], 10) : null,
+      title: titleM ? titleM[1] : '',
+      nickname: nickM ? nickM[1] : '',
+      avatar: avatarM ? avatarM[1].replace(/\\u002F/g, '/') : '',
+      web_rid: webRidM ? webRidM[1] : ''
+    };
+  }
+
+  return null;
+}
+
+// 从 JSON 片段中提取房间信息
+function extractRoomFromJson(seg) {
   const statusM = seg.match(/"status"\s*:\s*(\d+)/);
   const titleM = seg.match(/"title"\s*:\s*"([^"]{0,100})"/);
   const nickM = seg.match(/"nickname"\s*:\s*"([^"]{0,60})"/);
   const avatarM = seg.match(/"avatar_thumb"\s*:\s*\{[^}]*?"url_list"\s*:\s*\["([^"]+)"/);
   const webRidM = seg.match(/"web_rid"\s*:\s*"(\d+)"/);
+  const idStrM = seg.match(/"id_str"\s*:\s*"(\d+)"/);
+
   return {
     status: statusM ? parseInt(statusM[1], 10) : null,
     title: titleM ? titleM[1] : '',
     nickname: nickM ? nickM[1] : '',
     avatar: avatarM ? avatarM[1].replace(/\\u002F/g, '/') : '',
-    web_rid: webRidM ? webRidM[1] : ''
+    web_rid: webRidM ? webRidM[1] : (idStrM ? idStrM[1] : '')
   };
+}
+
+// 递归查找对象中的 room 信息
+function findRoomInObject(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (obj.room && typeof obj.room === 'object') {
+    const r = obj.room;
+    return {
+      status: r.status !== undefined ? parseInt(r.status, 10) : null,
+      title: r.title || '',
+      nickname: (r.owner && r.owner.nickname) || r.nickname || '',
+      avatar: (r.owner && r.owner.avatar_thumb && r.owner.avatar_thumb.url_list && r.owner.avatar_thumb.url_list[0]) ||
+              (r.avatar_thumb && r.avatar_thumb.url_list && r.avatar_thumb.url_list[0]) || '',
+      web_rid: r.web_rid || r.id_str || r.roomId || ''
+    };
+  }
+  for (const key in obj) {
+    const result = findRoomInObject(obj[key]);
+    if (result && result.status !== null) return result;
+  }
+  return null;
 }
 
 // ============================================================
@@ -147,7 +261,7 @@ async function checkOneLive(sub) {
         return changed;
       }
     } else if (sub.platform === 'douyin') {
-      const pageResp = await httpGet('https://live.douyin.com/' + sub.roomId, { headers: { 'Cookie': 'msToken=; ttwid=1|' + Date.now() + '|1|0|1' } });
+      const pageResp = await douyinGet('https://live.douyin.com/' + sub.roomId);
       const room = parseDouyinRoom(pageResp.body || '');
       const st2 = (room && room.status === 2) ? 1 : 0;
       const changed2 = sub.liveStatus !== st2;
