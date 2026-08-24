@@ -39,7 +39,9 @@ echo "[2/4] 申请证书并配置 nginx ..."
 # --non-interactive 非交互
 # --agree-tos 同意条款
 # --no-eff-email 不订阅邮件
-certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect --no-eff-email
+# --email 提供注册邮箱（certbot 必需）
+EMAIL="${EMAIL:-admin@${DOMAIN}}"
+certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect --no-eff-email --email "$EMAIL"
 
 # ---------- 3. 验证 ----------
 echo "[3/4] 验证 HTTPS ..."
