@@ -642,17 +642,18 @@ function connectSSE(){
   es.addEventListener('live-status-update', function(e){
     try{
       var d = JSON.parse(e.data);
+      var changed = false;
       for(var i = 0; i < subs.length; i++){
         if(subs[i].id === d.id){
-          subs[i].liveStatus = d.liveStatus;
-          if(d.title) subs[i].title = d.title;
-          if(d.uname) subs[i].uname = d.uname;
-          if(d.cover) subs[i].cover = d.cover;
-          if(d.avatar) subs[i].avatar = d.avatar;
+          if(subs[i].liveStatus !== d.liveStatus){ subs[i].liveStatus = d.liveStatus; changed = true; }
+          if(d.title && subs[i].title !== d.title){ subs[i].title = d.title; changed = true; }
+          if(d.uname && subs[i].uname !== d.uname){ subs[i].uname = d.uname; changed = true; }
+          if(d.cover && subs[i].cover !== d.cover){ subs[i].cover = d.cover; changed = true; }
+          if(d.avatar && subs[i].avatar !== d.avatar){ subs[i].avatar = d.avatar; changed = true; }
           break;
         }
       }
-      renderList();
+      if(changed) renderList();
     }catch(err){}
   });
   es.addEventListener('live-started', function(e){

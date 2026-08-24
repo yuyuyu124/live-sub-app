@@ -180,7 +180,10 @@ async function checkAllLive() {
     if (changed && sub.liveStatus === 0) {
       broadcast('live-ended', { id: sub.id });
     }
-    broadcast('live-status-update', { id: sub.id, liveStatus: sub.liveStatus, title: sub.title, uname: sub.uname, cover: sub.cover, avatar: sub.avatar });
+    // 只有状态变化或首次检查时才推送更新，避免频繁推送导致前端头像闪烁
+    if (changed || liveFirstCheck) {
+      broadcast('live-status-update', { id: sub.id, liveStatus: sub.liveStatus, title: sub.title, uname: sub.uname, cover: sub.cover, avatar: sub.avatar });
+    }
     if (i < liveSubs.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
     }
     saveLiveSubs();
