@@ -1,0 +1,10 @@
+# 直播订阅 · Render 一键部署配置
+# 用法：把本目录推到 GitHub，然后在 Render 用 Blueprint 导入本文件
+services:
+  - type: web
+    name: live-sub-app
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    autoDeploy: true

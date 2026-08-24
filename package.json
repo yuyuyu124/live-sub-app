@@ -1,0 +1,13 @@
+{
+  "name": "live-sub-app",
+  "version": "1.0.0",
+  "description": "直播订阅提醒 · 手机端应用（B站/抖音开播检测）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "license": "MIT"
+}

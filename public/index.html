@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#FF6B9D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>直播订阅</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{
+  --pink-0:#FFF6F9; --pink-1:#FBE6EE; --pink-2:#F6CDDD; --pink-3:#F2A7BE;
+  --rose:#FF6B9D; --rose-d:#E8557F; --ink:#5a3a4a; --ink-2:#9a6a7a; --ink-3:#bf9aab;
+  --card:#FFFFFF; --line:#F3D9E5; --green:#6BCB77; --green-d:#4fb05e;
+  --safe-top:env(safe-area-inset-top, 0px);
+  --safe-bottom:env(safe-area-inset-bottom, 0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",-apple-system,sans-serif;
+  color:var(--ink);background:
+    radial-gradient(600px 300px at 90% -5%, var(--pink-1), transparent 60%),
+    radial-gradient(500px 250px at 0% 5%, #FFF0F4, transparent 55%),
+    linear-gradient(180deg,#FFF9FB 0%,#FFF3F7 100%);
+  min-height:100vh;padding-bottom:calc(40px + var(--safe-bottom));
+  user-select:none;-webkit-user-select:none;
+}
+.app{max-width:480px;margin:0 auto;padding:0 16px}
+
+/* 头部 */
+header{
+  position:sticky;top:0;z-index:30;
+  background:linear-gradient(135deg,rgba(255,107,157,.94),rgba(255,143,177,.94));
+  color:#fff;padding:calc(14px + var(--safe-top)) 16px 14px;margin:0 -16px 14px;
+  box-shadow:0 4px 18px rgba(255,107,157,.25);
+  display:flex;align-items:center;justify-content:space-between;
+}
+header .title{font-size:18px;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+header .sub{font-size:11px;opacity:.85;margin-top:2px}
+.live-badge{
+  background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.35);
+  padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;
+  display:flex;align-items:center;gap:6px;
+}
+.live-badge .dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1.6s ease-in-out infinite}
+.live-badge.hidden{opacity:.55}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.75)}}
+
+/* 卡片 */
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 4px 16px rgba(255,150,180,.1)}
+.card-title{font-size:14px;font-weight:700;color:var(--rose-d);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.card-title .ic{font-size:16px}
+
+/* 添加订阅 */
+.add-row{display:flex;gap:8px;margin-bottom:8px}
+.platform-select{
+  flex-shrink:0;border:1px solid var(--line);border-radius:12px;background:var(--pink-0);
+  color:var(--ink);font-size:14px;font-weight:600;padding:0 8px;outline:none;appearance:none;
+  -webkit-appearance:none;text-align:center;
+}
+.text-input{
+  flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;background:#fff;
+  color:var(--ink);font-size:14px;padding:11px 12px;outline:none;transition:border-color .2s;
+}
+.text-input:focus{border-color:var(--pink-3)}
+.text-input::placeholder{color:var(--ink-3)}
+.btn-primary{
+  flex-shrink:0;border:none;border-radius:12px;background:linear-gradient(135deg,#FF6B9D,#FF8FB1);
+  color:#fff;font-size:14px;font-weight:600;padding:0 18px;cursor:pointer;transition:all .2s;
+  box-shadow:0 3px 10px rgba(255,107,157,.3);
+}
+.btn-primary:active{transform:scale(.96)}
+.btn-primary:disabled{opacity:.6}
+.add-hint{font-size:11px;color:var(--ink-3);line-height:1.6;margin-bottom:4px}
+.add-divider{display:flex;align-items:center;gap:10px;color:var(--ink-3);font-size:11px;margin:10px 0}
+.add-divider::before,.add-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* 订阅列表 */
+.list-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.list-head span{font-size:13px;font-weight:600;color:var(--ink)}
+.btn-text{border:none;background:var(--pink-1);color:var(--rose-d);font-size:12px;font-weight:600;padding:6px 12px;border-radius:10px;cursor:pointer}
+.btn-text:disabled{opacity:.6}
+.live-list{display:flex;flex-direction:column;gap:8px;max-height:46vh;overflow-y:auto}
+.live-list::-webkit-scrollbar{width:4px}
+.live-list::-webkit-scrollbar-thumb{background:var(--pink-2);border-radius:10px}
+.live-empty{text-align:center;color:var(--ink-3);font-size:12px;padding:26px 12px;line-height:1.8}
+.live-item{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;
+  background:var(--pink-0);border:1px solid var(--line);transition:all .2s;
+}
+.live-item.live-on{border-color:var(--rose);background:linear-gradient(135deg,rgba(255,182,200,.14),rgba(255,210,220,.06))}
+.avatar-wrap{position:relative;flex-shrink:0}
+.live-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--pink-1)}
+.avatar-ph{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--rose);background:var(--pink-1)}
+.live-dot-badge{
+  position:absolute;bottom:-1px;right:-1px;width:14px;height:14px;border-radius:50%;
+  background:var(--rose);border:2px solid #fff;display:none;
+}
+.live-item.live-on .live-dot-badge{display:block}
+.live-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.live-name{font-size:14px;color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live-title{font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live-status{font-size:10px;padding:4px 9px;border-radius:9px;flex-shrink:0;font-weight:600}
+.live-status.on{background:rgba(255,105,135,.15);color:var(--rose);animation:pulse 2s ease-in-out infinite}
+.live-status.off{background:var(--pink-1);color:var(--ink-3)}
+.live-act{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.icon-btn{
+  width:30px;height:30px;border-radius:9px;border:none;background:var(--pink-1);color:var(--ink-2);
+  font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;
+}
+.icon-btn:active{transform:scale(.9)}
+.icon-btn.del:active{background:rgba(255,105,135,.15);color:var(--rose)}
+
+/* 设置 */
+.setting-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+.setting-item:last-child{border-bottom:none}
+.setting-info .si-title{font-size:13px;color:var(--ink);font-weight:600}
+.setting-info .si-desc{font-size:11px;color:var(--ink-3);margin-top:2px}
+.switch{position:relative;display:inline-block;width:48px;height:28px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--pink-2);border-radius:20px;transition:.3s}
+.slider::before{content:"";position:absolute;height:22px;width:22px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.switch input:checked + .slider{background:var(--rose)}
+.switch input:checked + .slider::before{transform:translateX(20px)}
+.time-row{display:flex;align-items:center;gap:6px}
+.time-row input[type=time]{
+  border:1px solid var(--line);border-radius:10px;background:var(--pink-0);color:var(--ink);
+  font-size:12px;padding:7px 8px;outline:none;
+}
+.btn-soft{
+  border:1px solid var(--line);border-radius:10px;background:var(--pink-0);color:var(--rose-d);
+  font-size:12px;font-weight:600;padding:8px 14px;cursor:pointer;
+}
+.btn-soft:active{transform:scale(.96)}
+
+/* 悬浮提醒横幅 */
+#alertBanner{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  transform:translateY(-110%);transition:transform .45s cubic-bezier(.22,1,.36,1);
+}
+#alertBanner.show{transform:translateY(0)}
+.alert-card{
+  margin:calc(8px + var(--safe-top)) 12px 0;border-radius:18px;overflow:hidden;
+  background:linear-gradient(135deg,rgba(255,245,248,.97),rgba(255,235,240,.95));
+  border:1.5px solid rgba(255,150,180,.55);
+  box-shadow:0 8px 30px rgba(255,107,157,.3),0 2px 8px rgba(0,0,0,.08);
+  animation:glow 2.5s ease-in-out infinite;
+}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(255,107,157,.35),0 8px 30px rgba(255,107,157,.3)}50%{box-shadow:0 0 0 8px rgba(255,107,157,0),0 8px 30px rgba(255,107,157,.4)}}
+.alert-shimmer{height:3px;background:linear-gradient(90deg,transparent,rgba(255,107,157,.85),transparent);background-size:200% 100%;animation:shimmer 2s linear infinite}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.alert-body{display:flex;gap:12px;padding:14px}
+.alert-cover{position:relative;flex-shrink:0;width:64px;height:64px;border-radius:14px;overflow:hidden;border:2px solid rgba(255,150,180,.6)}
+.alert-cover img{width:100%;height:100%;object-fit:cover}
+.alert-cover .ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;background:linear-gradient(135deg,#FFC0CB,#FFB6C1)}
+.live-tag{position:absolute;top:3px;left:3px;background:rgba(255,60,90,.92);color:#fff;font-size:8px;font-weight:700;padding:2px 5px;border-radius:5px;display:flex;align-items:center;gap:3px}
+.live-tag .d{width:4px;height:4px;border-radius:50%;background:#fff;animation:pulse 1.2s ease-in-out infinite}
+.alert-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.alert-platform{font-size:9px;font-weight:600;color:#c87a9a}
+.alert-name{font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.alert-title{font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.alert-btns{display:flex;gap:8px;margin-top:6px}
+.btn-watch{flex:1;font-size:12px;font-weight:600;text-align:center;padding:8px 0;border-radius:11px;background:linear-gradient(135deg,#FF6B9D,#FF8FB1);color:#fff;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(255,107,157,.3)}
+.btn-received{flex:1;font-size:12px;font-weight:600;text-align:center;padding:8px 0;border-radius:11px;background:linear-gradient(135deg,#6BCB77,#8FDB9F);color:#fff;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(107,203,119,.3)}
+.btn-later{font-size:12px;font-weight:600;padding:8px 14px;border-radius:11px;background:rgba(255,255,255,.65);color:var(--ink-2);border:1px solid rgba(200,150,170,.3);cursor:pointer}
+.alert-progress{height:3px;background:rgba(255,150,180,.15)}
+.alert-progress-fill{height:100%;width:100%;background:linear-gradient(90deg,#FF6B9D,#FFB6C1);transition:width .1s linear}
+
+/* Toast */
+#toast{
+  position:fixed;left:50%;bottom:calc(60px + var(--safe-bottom));transform:translateX(-50%) translateY(20px);
+  background:rgba(60,35,45,.92);color:#fff;font-size:13px;padding:10px 18px;border-radius:12px;
+  opacity:0;pointer-events:none;transition:all .3s;z-index:200;max-width:80%;text-align:center;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* 底部提示 */
+.footer-note{text-align:center;color:var(--ink-3);font-size:11px;line-height:1.8;padding:8px 0 20px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="title">📡 直播订阅</div>
+    <div class="sub">B站 · 抖音 开播提醒</div>
+  </div>
+  <div class="live-badge" id="liveBadge"><span class="dot"></span><span id="liveBadgeCount">0</span> 直播中</div>
+</header>
+
+<div class="app">
+
+  <!-- 添加订阅 -->
+  <div class="card">
+    <div class="card-title"><span class="ic">➕</span>添加订阅</div>
+    <div class="add-row">
+      <select class="platform-select" id="platformSel">
+        <option value="bilibili">B站</option>
+        <option value="douyin">抖音</option>
+      </select>
+      <input type="text" class="text-input" id="quickInput" placeholder="输入房间号 / UID">
+      <button class="btn-primary" id="quickAddBtn">添加</button>
+    </div>
+    <div class="add-hint" id="quickHint">B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345</div>
+    <div class="add-divider">或粘贴完整链接</div>
+    <div class="add-row">
+      <input type="text" class="text-input" id="linkInput" placeholder="粘贴 B站 / 抖音 直播间链接或分享口令">
+      <button class="btn-primary" id="linkAddBtn">添加</button>
+    </div>
+    <div class="add-hint">支持：B站/抖音完整链接、房间号、抖音短链 v.douyin.com/xxx、抖音号</div>
+  </div>
+
+  <!-- 订阅列表 -->
+  <div class="card">
+    <div class="list-head">
+      <span>我的订阅</span>
+      <button class="btn-text" id="checkBtn">立即检查</button>
+    </div>
+    <div class="live-list" id="liveList">
+      <div class="live-empty">还没有订阅任何主播~<br>在上方粘贴直播间链接来添加</div>
+    </div>
+  </div>
+
+  <!-- 提醒设置 -->
+  <div class="card">
+    <div class="card-title"><span class="ic">⚙️</span>提醒设置</div>
+    <div class="setting-item">
+      <div class="setting-info">
+        <div class="si-title">开播声音提醒</div>
+        <div class="si-desc">主播开播时播放轻柔提示音</div>
+      </div>
+      <label class="switch"><input type="checkbox" id="soundSwitch" checked><span class="slider"></span></label>
+    </div>
+    <div class="setting-item">
+      <div class="setting-info">
+        <div class="si-title">免打扰时段</div>
+        <div class="si-desc">该时段内不弹开播提醒</div>
+      </div>
+      <div class="time-row">
+        <input type="time" id="dndStart" value="00:00">
+        <span style="color:var(--ink-3);font-size:12px">~</span>
+        <input type="time" id="dndEnd" value="08:00">
+      </div>
+    </div>
+    <div class="setting-item">
+      <div class="setting-info">
+        <div class="si-title">系统通知</div>
+        <div class="si-desc">开播时在通知栏弹出提醒</div>
+      </div>
+      <button class="btn-soft" id="notifyBtn">开启通知</button>
+    </div>
+  </div>
+
+  <div class="footer-note">每 60 秒自动检测一次开播状态<br>请保持本页面打开（可添加到主屏幕使用）</div>
+</div>
+
+<!-- 悬浮提醒横幅 -->
+<div id="alertBanner">
+  <div class="alert-card" id="alertCard">
+    <div class="alert-shimmer"></div>
+    <div class="alert-body">
+      <div class="alert-cover">
+        <div class="ph" id="alertPh">📺</div>
+        <img id="alertImg" style="display:none" onerror="this.style.display='none';document.getElementById('alertPh').style.display='flex'">
+        <div class="live-tag"><span class="d"></span>LIVE</div>
+      </div>
+      <div class="alert-info">
+        <div class="alert-platform" id="alertPlatform"></div>
+        <div class="alert-name" id="alertName"></div>
+        <div class="alert-title" id="alertTitle"></div>
+        <div class="alert-btns">
+          <button class="btn-watch" id="alertWatch">去观看</button>
+          <button class="btn-received" id="alertReceived" style="display:none">已收到</button>
+          <button class="btn-later" id="alertLater">稍后</button>
+        </div>
+      </div>
+    </div>
+    <div class="alert-progress"><div class="alert-progress-fill" id="alertProgress"></div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================= 直播订阅 · 手机端 ================= */
+var API = '';  // 同源，留空即可
+var subs = [];          // 服务端返回的富数据（含直播状态）
+var localSubs = [];     // 手机本地订阅（localStorage 持久化，服务端重启不丢）
+var alertStates = {};   // { id: { level, timers:[], confirmed, banner } }
+var soundOn = true;
+var dndStart = '00:00', dndEnd = '08:00';
+var notifyGranted = false;
+
+function escHtml(s){return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+/* ---- 本地订阅存取（localStorage）---- */
+function loadLocal(){
+  try{ localSubs = JSON.parse(localStorage.getItem('liveSubs') || '[]'); }catch(e){ localSubs = []; }
+  if(!Array.isArray(localSubs)) localSubs = [];
+}
+function saveLocal(){
+  try{ localStorage.setItem('liveSubs', JSON.stringify(localSubs)); }catch(e){}
+}
+
+/* ---- Toast ---- */
+var toastTimer = null;
+function showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+
+/* ---- 设置存取 ---- */
+function loadSettings(){
+  try{
+    var s = JSON.parse(localStorage.getItem('liveSettings') || '{}');
+    if(s.sound !== undefined) soundOn = !!s.sound;
+    if(s.dndStart) dndStart = s.dndStart;
+    if(s.dndEnd) dndEnd = s.dndEnd;
+    document.getElementById('soundSwitch').checked = soundOn;
+    document.getElementById('dndStart').value = dndStart;
+    document.getElementById('dndEnd').value = dndEnd;
+  }catch(e){}
+}
+function saveSettings(){
+  localStorage.setItem('liveSettings', JSON.stringify({ sound: soundOn, dndStart: dndStart, dndEnd: dndEnd }));
+}
+document.getElementById('soundSwitch').addEventListener('change', function(){
+  soundOn = this.checked; saveSettings();
+});
+document.getElementById('dndStart').addEventListener('change', function(){ dndStart = this.value; saveSettings(); });
+document.getElementById('dndEnd').addEventListener('change', function(){ dndEnd = this.value; saveSettings(); });
+
+/* ---- 免打扰判断 ---- */
+function inDnd(){
+  try{
+    var now = new Date();
+    var cur = now.getHours() * 60 + now.getMinutes();
+    var s = dndStart.split(':').map(Number), e = dndEnd.split(':').map(Number);
+    var sm = s[0]*60 + s[1], em = e[0]*60 + e[1];
+    if(sm === em) return false;
+    if(sm < em) return cur >= sm && cur < em;
+    return cur >= sm || cur < em;  // 跨天
+  }catch(err){ return false; }
+}
+
+/* ---- 提示音（Web Audio 现算 880→1320Hz）---- */
+var audioCtx = null;
+function playAlertSound(){
+  if(!soundOn) return;
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+  }catch(e){}
+}
+
+/* ---- 系统通知 ---- */
+function requestNotify(){
+  if(!('Notification' in window)){ showToast('当前浏览器不支持系统通知'); return; }
+  Notification.requestPermission().then(function(p){
+    notifyGranted = p === 'granted';
+    document.getElementById('notifyBtn').textContent = notifyGranted ? '已开启' : '开启通知';
+    if(notifyGranted) showToast('系统通知已开启');
+    else showToast('通知权限未开启');
+  });
+}
+document.getElementById('notifyBtn').addEventListener('click', requestNotify);
+function showSystemNotif(sub){
+  if(!notifyGranted) return;
+  if(!('Notification' in window)) return;
+  try{
+    var n = new Notification('开播提醒 ' + (sub.uname || ''), {
+      body: sub.title || '正在直播中',
+      icon: sub.avatar || 'icon.svg',
+      tag: 'live-' + sub.id
+    });
+    n.onclick = function(){
+      window.focus();
+      openLive(sub);
+      confirmAlert(sub.id);
+    };
+  }catch(e){}
+}
+
+/* ---- 打开直播间 ---- */
+function openLive(sub){
+  var url = sub.platform === 'bilibili' ? 'https://live.bilibili.com/' + sub.roomId : 'https://live.douyin.com/' + sub.roomId;
+  window.open(url, '_blank');
+}
+
+/* ---- 三级递进提醒 ---- */
+var currentAlertId = null;
+function showAlertBanner(sub, persist){
+  var st = alertStates[sub.id];
+  if(st && st.confirmed) return;
+  currentAlertId = sub.id;
+  var banner = document.getElementById('alertBanner');
+  document.getElementById('alertPlatform').textContent = sub.platform === 'bilibili' ? 'B站直播' : '抖音直播';
+  document.getElementById('alertName').textContent = sub.remark || sub.uname || (sub.platform === 'bilibili' ? 'B站' : '抖音') + ' ' + sub.roomId;
+  document.getElementById('alertTitle').textContent = sub.title || '正在直播中';
+  var img = document.getElementById('alertImg'), ph = document.getElementById('alertPh');
+  if(sub.avatar){ img.src = sub.avatar; img.style.display = 'block'; ph.style.display = 'none'; }
+  else { img.style.display = 'none'; ph.style.display = 'flex'; ph.textContent = sub.platform === 'bilibili' ? '📺' : '🎵'; }
+  document.getElementById('alertLater').style.display = persist ? 'none' : 'block';
+  document.getElementById('alertReceived').style.display = persist ? 'block' : 'none';
+  document.getElementById('alertProgress').style.display = persist ? 'none' : 'block';
+  banner.classList.add('show');
+  if(!st) alertStates[sub.id] = { level: 1, timers: [], confirmed: false, banner: true };
+  alertStates[sub.id].level = persist ? 3 : 2;
+  alertStates[sub.id].banner = true;
+  // 第一层：15 秒倒计时，超时按"稍后"
+  if(!persist){
+    var dur = 15000, start = Date.now();
+    var prog = document.getElementById('alertProgress');
+    var pt = setInterval(function(){
+      var pct = Math.max(0, 100 - (Date.now() - start) / dur * 100);
+      prog.style.width = pct + '%';
+      if(pct <= 0){ clearInterval(pt); dismissAlert(sub.id, false); }
+    }, 100);
+    alertStates[sub.id].timers.push(pt);
+  }
+}
+function startFlash(sub){
+  var st = alertStates[sub.id];
+  if(st && (st.level >= 3 || st.confirmed)) return;
+  if(!st) alertStates[sub.id] = { level: 2, timers: [], confirmed: false, banner: true };
+  alertStates[sub.id].level = 3;
+  var st2 = alertStates[sub.id];
+  var soundTimer = setInterval(function(){
+    if(alertStates[sub.id] && alertStates[sub.id].confirmed){ clearInterval(soundTimer); return; }
+    playAlertSound();
+  }, 3000);
+  st2.timers.push(soundTimer);
+  playAlertSound();
+  showAlertBanner(sub, true);
+}
+function triggerAlert(sub){
+  if(inDnd()) return;
+  if(alertStates[sub.id]) return;
+  alertStates[sub.id] = { level: 1, timers: [], confirmed: false, banner: false };
+  // Level 1（0s）：系统通知 + 横幅
+  showSystemNotif(sub);
+  showAlertBanner(sub, false);
+  // Level 2（30s）：若未确认，保持横幅（已显示）
+  // Level 3（60s）：狂闪 + 循环音效
+  var t3 = setTimeout(function(){
+    if(alertStates[sub.id] && !alertStates[sub.id].confirmed) startFlash(sub);
+  }, 60000);
+  alertStates[sub.id].timers.push(t3);
+}
+function confirmAlert(id){
+  if(!alertStates[id]) return;
+  alertStates[id].confirmed = true;
+  alertStates[id].timers.forEach(function(t){ clearInterval(t); });
+  alertStates[id].timers = [];
+  hideBanner();
+  var sid = id;
+  setTimeout(function(){ delete alertStates[sid]; }, 2000);
+}
+function dismissAlert(id, confirmed){
+  if(confirmed){ confirmAlert(id); return; }
+  // "稍后"：只关横幅，不停 Level3 定时器
+  hideBanner();
+  if(alertStates[id]) alertStates[id].banner = false;
+}
+function hideBanner(){
+  document.getElementById('alertBanner').classList.remove('show');
+}
+function clearAlert(id){
+  if(!alertStates[id]) return;
+  alertStates[id].timers.forEach(function(t){ clearInterval(t); });
+  delete alertStates[id];
+  hideBanner();
+}
+document.getElementById('alertWatch').addEventListener('click', function(){
+  var id = currentAlertId; if(!id) return;
+  var sub = subs.find(function(s){ return s.id === id; });
+  if(sub) openLive(sub);
+  confirmAlert(id);
+});
+document.getElementById('alertReceived').addEventListener('click', function(){
+  var id = currentAlertId; if(!id) return;
+  confirmAlert(id);
+});
+document.getElementById('alertLater').addEventListener('click', function(){
+  var id = currentAlertId; if(!id) return;
+  dismissAlert(id, false);
+});
+
+/* ---- 订阅列表渲染 ---- */
+function renderList(){
+  var list = document.getElementById('liveList');
+  if(!subs || subs.length === 0){
+    list.innerHTML = '<div class="live-empty">还没有订阅任何主播~<br>在上方粘贴直播间链接来添加</div>';
+    updateBadge(0);
+    return;
+  }
+  var sorted = subs.slice().sort(function(a,b){ return b.liveStatus - a.liveStatus; });
+  var liveCount = 0, html = '';
+  for(var i = 0; i < sorted.length; i++){
+    var s = sorted[i];
+    if(s.liveStatus === 1) liveCount++;
+    var icon = s.platform === 'bilibili' ? 'B' : 'D';
+    var name = s.remark || s.uname || (s.platform === 'bilibili' ? 'B站' : '抖音') + ' ' + s.roomId;
+    var avatarHtml = s.avatar
+      ? '<img class="live-avatar" src="' + escHtml(s.avatar) + '" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div class="avatar-ph" style="display:none">' + icon + '</div>'
+      : '<div class="avatar-ph">' + icon + '</div>';
+    var statusHtml = s.liveStatus === 1
+      ? '<span class="live-status on">直播中</span>'
+      : '<span class="live-status off">未开播</span>';
+    var titleHtml = s.title ? '<div class="live-title">' + escHtml(s.title) + '</div>' : '';
+    html += '<div class="live-item' + (s.liveStatus === 1 ? ' live-on' : '') + '" data-id="' + escHtml(s.id) + '">'
+      + '<div class="avatar-wrap">' + avatarHtml + '<span class="live-dot-badge"></span></div>'
+      + '<div class="live-info"><div class="live-name">' + escHtml(name) + '</div>' + titleHtml + '</div>'
+      + statusHtml
+      + '<div class="live-act">'
+      + '<button class="icon-btn remark" data-id="' + escHtml(s.id) + '" title="备注">✎</button>'
+      + '<button class="icon-btn del" data-id="' + escHtml(s.id) + '" title="删除">✕</button>'
+      + '</div></div>';
+  }
+  list.innerHTML = html;
+  updateBadge(liveCount);
+}
+function updateBadge(count){
+  var badge = document.getElementById('liveBadge');
+  document.getElementById('liveBadgeCount').textContent = count;
+  badge.classList.toggle('hidden', count === 0);
+}
+
+/* ---- 数据同步：把本地订阅推给服务端，拉取最新状态 ---- */
+function syncSubs(){
+  return fetch(API + '/api/subs/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subs: localSubs })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if(d.success){ subs = d.subs || []; renderList(); }
+  }).catch(function(){});
+}
+
+/* ---- 添加订阅 ---- */
+function doAdd(input, btn){
+  if(!input) return;
+  btn.disabled = true; btn.textContent = '添加中...';
+  fetch(API + '/api/subs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: input })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if(d.success){
+      localSubs.push({ id: d.sub.id, platform: d.sub.platform, roomId: d.sub.roomId, remark: '' });
+      saveLocal();
+      showToast('订阅成功~');
+      syncSubs();
+    }
+    else showToast(d.error || '添加失败');
+  }).catch(function(){ showToast('网络错误，请检查服务是否启动'); })
+  .finally(function(){ btn.disabled = false; btn.textContent = '添加'; });
+}
+document.getElementById('quickAddBtn').addEventListener('click', function(){
+  var platform = document.getElementById('platformSel').value;
+  var uid = document.getElementById('quickInput').value.trim();
+  if(!uid) return;
+  var link = platform === 'bilibili' ? uid : (/^\d+$/.test(uid) ? 'https://live.douyin.com/' + uid : uid);
+  doAdd(link, this);
+  document.getElementById('quickInput').value = '';
+});
+document.getElementById('linkAddBtn').addEventListener('click', function(){
+  var v = document.getElementById('linkInput').value.trim();
+  if(!v) return;
+  doAdd(v, this);
+  document.getElementById('linkInput').value = '';
+});
+document.getElementById('quickInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') document.getElementById('quickAddBtn').click(); });
+document.getElementById('linkInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') document.getElementById('linkAddBtn').click(); });
+
+/* 平台切换提示 */
+var platformSel = document.getElementById('platformSel');
+function updateHint(){
+  var hint = document.getElementById('quickHint');
+  if(platformSel.value === 'bilibili'){
+    document.getElementById('quickInput').placeholder = '输入B站房间号';
+    hint.textContent = 'B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345';
+  } else {
+    document.getElementById('quickInput').placeholder = '输入抖音UID或分享链接';
+    hint.textContent = '可输入：①抖音UID数字 ②分享链接 v.douyin.com/xxx ③用户主页链接';
+  }
+}
+platformSel.addEventListener('change', updateHint);
+updateHint();
+
+/* ---- 列表操作：备注 / 删除 ---- */
+document.getElementById('liveList').addEventListener('click', function(e){
+  var del = e.target.closest('.icon-btn.del');
+  var rem = e.target.closest('.icon-btn.remark');
+  if(del){
+    var id = del.getAttribute('data-id');
+    if(!confirm('确定取消订阅该主播吗？')) return;
+    localSubs = localSubs.filter(function(s){ return s.id !== id; });
+    saveLocal();
+    syncSubs();
+    showToast('已取消订阅');
+  } else if(rem){
+    var rid = rem.getAttribute('data-id');
+    var sub = subs.find(function(s){ return s.id === rid; });
+    var cur = sub ? (sub.remark || '') : '';
+    var nn = prompt('输入备注名（留空则使用主播昵称）：', cur);
+    if(nn !== null){
+      var ls = localSubs.find(function(s){ return s.id === rid; });
+      if(ls){ ls.remark = nn.trim(); saveLocal(); syncSubs(); showToast('备注已更新'); }
+    }
+  }
+});
+
+/* ---- 立即检查 ---- */
+document.getElementById('checkBtn').addEventListener('click', function(){
+  var btn = this;
+  btn.disabled = true; btn.textContent = '检查中...';
+  fetch(API + '/api/check', { method: 'POST' }).then(function(r){ return r.json(); }).then(function(){
+    showToast('检查完成~');
+  }).catch(function(){ showToast('检查失败'); })
+  .finally(function(){ btn.disabled = false; btn.textContent = '立即检查'; });
+});
+
+/* ---- SSE 实时推送 ---- */
+function connectSSE(){
+  var es = new EventSource(API + '/api/events');
+  es.addEventListener('live-status-update', function(e){
+    try{
+      var d = JSON.parse(e.data);
+      for(var i = 0; i < subs.length; i++){
+        if(subs[i].id === d.id){
+          subs[i].liveStatus = d.liveStatus;
+          if(d.title) subs[i].title = d.title;
+          if(d.uname) subs[i].uname = d.uname;
+          if(d.cover) subs[i].cover = d.cover;
+          if(d.avatar) subs[i].avatar = d.avatar;
+          break;
+        }
+      }
+      renderList();
+    }catch(err){}
+  });
+  es.addEventListener('live-started', function(e){
+    try{
+      var d = JSON.parse(e.data);
+      var sub = subs.find(function(s){ return s.id === d.id; });
+      if(sub) triggerAlert(sub);
+    }catch(err){}
+  });
+  es.addEventListener('live-ended', function(e){
+    try{
+      var d = JSON.parse(e.data);
+      clearAlert(d.id);
+    }catch(err){}
+  });
+  es.addEventListener('live-subs-updated', function(){ syncSubs(); });
+  es.onopen = function(){ syncSubs(); };  // 重连成功后重新同步（服务端可能已重启）
+  es.onerror = function(){
+    // 断线自动重连（EventSource 自带重连），重连成功后 onopen 会重新同步
+  };
+}
+
+/* ---- 初始化 ---- */
+loadSettings();
+loadLocal();
+syncSubs();
+connectSSE();
+setInterval(function(){ syncSubs(); }, 120000);  // 兜底定期刷新（同时保持免费托管服务不休眠）
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "直播订阅",
+  "short_name": "直播订阅",
+  "description": "B站 / 抖音 直播开播提醒",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#FFF6F9",
+  "theme_color": "#FF6B9D",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

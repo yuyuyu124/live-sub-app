@@ -1,0 +1,7 @@
+node_modules
+live_subs.json
+*.log
+.git
+README.md
+render.yaml
+.dockerignore
