@@ -65,7 +65,7 @@ function parseLiveInput(input) {
   if (!input) return null;
   let m = input.match(/live\.bilibili\.com\/(\d+)/);
   if (m) return { platform: 'bilibili', roomId: m[1] };
-  if (/^\d{2,10}$/.test(input)) return { platform: 'bilibili', roomId: input };   // 纯数字 = B站房间号
+  if (/^\d{1,10}$/.test(input)) return { platform: 'bilibili', roomId: input };   // 纯数字 = B站房间号（1~10位）
   m = input.match(/live\.douyin\.com\/(\d+)/);
   if (m) return { platform: 'douyin', roomId: m[1] };
   if (/v\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };       // 抖音短链
