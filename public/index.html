@@ -135,6 +135,14 @@ header .sub{font-size:11px;opacity:.85;margin-top:2px}
   font-size:12px;font-weight:600;padding:8px 14px;cursor:pointer;
 }
 .btn-soft:active{transform:scale(.96)}
+.push-link{
+  display:flex;align-items:center;justify-content:space-between;text-decoration:none;color:inherit;
+}
+.push-link .arrow{color:var(--ink-3);font-size:16px}
+.push-status{font-size:11px;font-weight:600;padding:3px 9px;border-radius:9px;flex-shrink:0}
+.push-status.on{background:rgba(107,203,119,.15);color:var(--green-d)}
+.push-status.off{background:var(--pink-1);color:var(--ink-3)}
+.userid-box{font-size:10px;color:var(--ink-3);background:#FFF6F9;border:1px dashed var(--pink-1);border-radius:8px;padding:7px 10px;margin-top:10px;word-break:break-all;line-height:1.5}
 
 /* 悬浮提醒横幅 */
 #alertBanner{
@@ -252,6 +260,16 @@ header .sub{font-size:11px;opacity:.85;margin-top:2px}
       </div>
       <button class="btn-soft" id="notifyBtn">开启通知</button>
     </div>
+    <div class="setting-item">
+      <a class="push-link" href="/settings">
+        <div class="setting-info">
+          <div class="si-title">微信/手机推送</div>
+          <div class="si-desc">关掉网页也能收到开播提醒(多用户各自独立)</div>
+        </div>
+        <span class="push-status off" id="pushStatusBadge">未配置</span>
+      </a>
+    </div>
+    <div class="userid-box" id="userIdBox">用户 ID 加载中...</div>
   </div>
 
   <div class="footer-note">每 60 秒自动检测一次开播状态<br>请保持本页面打开（可添加到主屏幕使用）</div>
@@ -285,8 +303,23 @@ header .sub{font-size:11px;opacity:.85;margin-top:2px}
 <div id="toast"></div>
 
 <script>
-/* ================= 直播订阅 · 手机端 ================= */
+/* ================= 直播订阅 · 手机端(多用户版) ================= */
 var API = '';  // 同源，留空即可
+
+/* ---- 多用户:userId(浏览器 localStorage,每个用户独立) ---- */
+function getUserId(){
+  var uid = localStorage.getItem('liveUserId');
+  if(!uid){
+    if(window.crypto && crypto.randomUUID){ uid = crypto.randomUUID(); }
+    else { uid = 'u-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2,12); }
+    localStorage.setItem('liveUserId', uid);
+  }
+  return uid;
+}
+function apiHeaders(extra){
+  return Object.assign({ 'Content-Type':'application/json', 'X-User-Id': getUserId() }, extra || {});
+}
+
 var subs = [];          // 服务端返回的富数据（含直播状态）
 var localSubs = [];     // 手机本地订阅（localStorage 持久化，服务端重启不丢）
 var alertStates = {};   // { id: { level, timers:[], confirmed, banner } }
@@ -422,7 +455,6 @@ function showAlertBanner(sub, persist){
   if(!st) alertStates[sub.id] = { level: 1, timers: [], confirmed: false, banner: true };
   alertStates[sub.id].level = persist ? 3 : 2;
   alertStates[sub.id].banner = true;
-  // 第一层：15 秒倒计时，超时按"稍后"
   if(!persist){
     var dur = 15000, start = Date.now();
     var prog = document.getElementById('alertProgress');
@@ -452,11 +484,8 @@ function triggerAlert(sub){
   if(inDnd()) return;
   if(alertStates[sub.id]) return;
   alertStates[sub.id] = { level: 1, timers: [], confirmed: false, banner: false };
-  // Level 1（0s）：系统通知 + 横幅
   showSystemNotif(sub);
   showAlertBanner(sub, false);
-  // Level 2（30s）：若未确认，保持横幅（已显示）
-  // Level 3（60s）：狂闪 + 循环音效
   var t3 = setTimeout(function(){
     if(alertStates[sub.id] && !alertStates[sub.id].confirmed) startFlash(sub);
   }, 60000);
@@ -473,7 +502,6 @@ function confirmAlert(id){
 }
 function dismissAlert(id, confirmed){
   if(confirmed){ confirmAlert(id); return; }
-  // "稍后"：只关横幅，不停 Level3 定时器
   hideBanner();
   if(alertStates[id]) alertStates[id].banner = false;
 }
@@ -541,11 +569,28 @@ function updateBadge(count){
   badge.classList.toggle('hidden', count === 0);
 }
 
+/* ---- 拉取推送配置状态(显示已配置/未配置徽标) ---- */
+function loadPushStatus(){
+  fetch(API + '/api/push-config', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var badge = document.getElementById('pushStatusBadge');
+      if(d.success && d.config && d.config.pushType && d.config.pushKey){
+        badge.textContent = '已配置';
+        badge.className = 'push-status on';
+      } else {
+        badge.textContent = '未配置';
+        badge.className = 'push-status off';
+      }
+    })
+    .catch(function(){});
+}
+
 /* ---- 数据同步：把本地订阅推给服务端，拉取最新状态 ---- */
 function syncSubs(){
   return fetch(API + '/api/subs/sync', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: apiHeaders(),
     body: JSON.stringify({ subs: localSubs })
   }).then(function(r){ return r.json(); }).then(function(d){
     if(d.success){ subs = d.subs || []; renderList(); }
@@ -558,7 +603,7 @@ function doAdd(input, btn){
   btn.disabled = true; btn.textContent = '添加中...';
   fetch(API + '/api/subs', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: apiHeaders(),
     body: JSON.stringify({ input: input })
   }).then(function(r){ return r.json(); }).then(function(d){
     if(d.success){
@@ -630,15 +675,15 @@ document.getElementById('liveList').addEventListener('click', function(e){
 document.getElementById('checkBtn').addEventListener('click', function(){
   var btn = this;
   btn.disabled = true; btn.textContent = '检查中...';
-  fetch(API + '/api/check', { method: 'POST' }).then(function(r){ return r.json(); }).then(function(){
+  fetch(API + '/api/check', { method: 'POST', headers: apiHeaders() }).then(function(r){ return r.json(); }).then(function(){
     showToast('检查完成~');
   }).catch(function(){ showToast('检查失败'); })
   .finally(function(){ btn.disabled = false; btn.textContent = '立即检查'; });
 });
 
-/* ---- SSE 实时推送 ---- */
+/* ---- SSE 实时推送(按 userId 分发) ---- */
 function connectSSE(){
-  var es = new EventSource(API + '/api/events');
+  var es = new EventSource(API + '/api/events?userId=' + encodeURIComponent(getUserId()));
   es.addEventListener('live-status-update', function(e){
     try{
       var d = JSON.parse(e.data);
@@ -670,18 +715,23 @@ function connectSSE(){
     }catch(err){}
   });
   es.addEventListener('live-subs-updated', function(){ syncSubs(); });
-  es.onopen = function(){ syncSubs(); };  // 重连成功后重新同步（服务端可能已重启）
-  es.onerror = function(){
-    // 断线自动重连（EventSource 自带重连），重连成功后 onopen 会重新同步
-  };
+  es.onopen = function(){ syncSubs(); };
+  es.onerror = function(){};
 }
 
 /* ---- 初始化 ---- */
+(function initUserBox(){
+  var uid = getUserId();
+  document.getElementById('userIdBox').innerHTML =
+    '🆔 你的用户 ID:<br><b style="color:var(--ink-2)">' + escHtml(uid) + '</b><br>' +
+    '<span style="color:var(--ink-3)">换了浏览器/清了缓存会变成新用户,需重新配置推送</span>';
+})();
 loadSettings();
 loadLocal();
 syncSubs();
+loadPushStatus();
 connectSSE();
-setInterval(function(){ syncSubs(); }, 120000);  // 兜底定期刷新（同时保持免费托管服务不休眠）
+setInterval(function(){ syncSubs(); }, 120000);
 </script>
 </body>
 </html>
