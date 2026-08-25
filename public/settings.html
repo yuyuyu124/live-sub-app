@@ -50,7 +50,7 @@ header .title{font-size:18px;font-weight:700}
     <p>开播时,服务器会按你的配置主动推送到你的微信/手机,即使关闭网页也能收到。每个用户的配置相互独立。</p>
     <div class="radio-group" id="pushTypeGroup">
       <label class="radio-item"><input type="radio" name="pushType" value="serverchan"><div class="info"><div class="name">Server酱 → 微信</div><div class="desc">扫码登录拿 sendkey,免费 5 条/天,安卓首选</div></div></label>
-      <label class="radio-item"><input type="radio" name="pushType" value="pushplus"><div class="info"><div class="name">PushPlus → 微信</div><div class="desc">扫码登录拿 token,免费 200 条/天</div></div></label>
+      <label class="radio-item"><input type="radio" name="pushType" value="pushplus"><div class="info"><div class="name">PushPlus → 微信</div><div class="desc">扫码登录拿 token,免费 200 条/天</div><div class="desc" style="color:#e67c0e">⚠️ 可能需要付费实名,未测试</div></div></label>
       <label class="radio-item"><input type="radio" name="pushType" value="bark"><div class="info"><div class="name">Bark → iOS 通知</div><div class="desc">App Store 装 Bark App,自建或用官方,无限</div></div></label>
     </div>
   </div>
@@ -97,7 +97,7 @@ function apiHeaders(extra){
 
 const howtoMap = {
   serverchan: '📌 <b>Server酱</b><br>1. 微信扫码登录 <a href="https://sct.ftqq.com/r/3450" target="_blank">sct.ftqq.com/r/3450</a><br>2. 登录后复制 SendKey<br>3. 粘贴到上方输入框',
-  pushplus: '📌 <b>PushPlus</b><br>1. 微信扫码登录 <a href="https://www.pushplus.plus" target="_blank">pushplus.plus</a><br>2. 复制一对一推送 token<br>3. 粘贴到上方输入框<br><br>⚠️ 可能需要付费实名,未测试',
+  pushplus: '📌 <b>PushPlus</b><br>1. 微信扫码登录 <a href="https://www.pushplus.plus" target="_blank">pushplus.plus</a><br>2. 复制一对一推送 token<br>3. 粘贴到上方输入框',
   bark: '📌 <b>Bark</b><br>1. App Store 装 Bark<br>2. 打开 App 复制首页 URL<br>3. 粘贴完整 URL 或末尾 key'
 };
 function showToast(m){const t=document.getElementById('toast');t.innerHTML=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
