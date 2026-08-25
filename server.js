@@ -1,38 +1,34 @@
 // ================= server.js =================
-// 直播订阅提醒 · 手机端后端服务
-// 复刻「直播订阅功能移植手册」的核心逻辑：
-//   - B站 / 抖音 直播间订阅
-//   - 60 秒轮询检测开播状态（多订阅间隔 2 秒）
-//   - 通过 SSE 实时推送状态给手机端
-// 纯 Node 内置模块，无任何第三方依赖。
-//
-// 启动：node server.js
-// 手机访问：http://<电脑IP>:3000
-// 可选环境变量：PORT（默认 3000）、LIVE_POLL_MS（轮询间隔，默认 60000）
-// ------------------------------------------------
+// 直播订阅提醒 · 多用户版
+//   - 每个用户独立 UUID(浏览器 localStorage)
+//   - 每个用户独立订阅 + 独立推送配置
+//   - 轮询按 room 去重,开播时按订阅者各自的 key 推送
+//   - SSE 按 userId 分发
+// 启动:node server.js
+// ============================================================
 
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+const store = require('./lib/store');
+const push = require('./lib/push');
 
 // ---- 配置 ----
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const POLL_INTERVAL = parseInt(process.env.LIVE_POLL_MS || '60000', 10);
-const STAGGER_MS = 2000;                 // 多个订阅之间间隔，避免风控
-const DATA_FILE = path.join(__dirname, 'live_subs.json');
+const STAGGER_MS = 2000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
-// ---- 数据 ----
-let liveSubs = [];          // 订阅列表
-let liveTimer = null;       // 轮询定时器
-let liveFirstCheck = true;  // 首次检查：已在直播也提醒一次
-let sseClients = [];        // SSE 客户端集合
+let liveTimer = null;
+let liveFirstCheck = true;
+let sseClients = [];   // [{ res, userId }]
 
 // ============================================================
-// 纯 HTTP GET（基于 Node 内置 fetch，可跟随重定向）
-// 带完整浏览器头，规避 B站/抖音 的风控拦截
+// HTTP 工具
 // ============================================================
 async function httpGet(urlStr, options) {
   options = options || {};
@@ -58,98 +54,71 @@ async function liveReq(urlStr, options) {
 }
 
 // ============================================================
-// 解析用户输入 → { platform, roomId } 或 { platform:'douyin', needResolve, url }
+// 抖音反风控 Cookie
+// ============================================================
+function genDouyinCookie() {
+  const now = Date.now();
+  const randStr = Math.random().toString(36).substring(2, 34);
+  const msToken = randStr;
+  const ttwid = '1%7C' + now + '%7C1%7C0%7C1%7C' + Math.random().toString(36).substring(2, 18);
+  return 'msToken=' + msToken + '; ttwid=' + ttwid + '; IsDouyinOpen=false; s_v_web_id=verify_' + randStr.substring(0, 20);
+}
+
+async function douyinGet(urlStr) {
+  const headers = {
+    'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache',
+    'Referer': 'https://live.douyin.com/',
+    'sec-ch-ua': '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="24"',
+    'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'same-origin',
+    'sec-fetch-user': '?1', 'Upgrade-Insecure-Requests': '1', 'Cookie': genDouyinCookie()
+  };
+  try {
+    const resp = await fetch(urlStr, { headers: headers, redirect: 'follow' });
+    const body = await resp.text();
+    return { body: body, statusCode: resp.status, finalUrl: resp.url || urlStr };
+  } catch (e) { return { body: '', statusCode: 0, finalUrl: urlStr }; }
+}
+
+// ============================================================
+// 解析用户输入
 // ============================================================
 function parseLiveInput(input) {
   input = (input || '').trim();
   if (!input) return null;
   let m = input.match(/live\.bilibili\.com\/(\d+)/);
   if (m) return { platform: 'bilibili', roomId: m[1] };
-  if (/^\d{1,10}$/.test(input)) return { platform: 'bilibili', roomId: input };   // 纯数字 = B站房间号（1~10位）
+  if (/^\d{1,10}$/.test(input)) return { platform: 'bilibili', roomId: input };
   m = input.match(/live\.douyin\.com\/(\d+)/);
   if (m) return { platform: 'douyin', roomId: m[1] };
-  if (/v\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };       // 抖音短链
+  if (/v\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
   if (/live\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
-  if (/douyin\.com\/user\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };    // 用户主页
-  if (/^[a-zA-Z][a-zA-Z0-9_.-]{1,29}$/.test(input)) {                              // 抖音号（字母开头）
+  if (/douyin\.com\/user\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
+  if (/^[a-zA-Z][a-zA-Z0-9_.-]{1,29}$/.test(input)) {
     return { platform: 'douyin', needResolve: true, url: 'https://live.douyin.com/' + encodeURIComponent(input) };
   }
   return null;
 }
 
-// ============================================================
-// 生成抖音反风控 Cookie（msToken + ttwid）
-// ============================================================
-function genDouyinCookie() {
-  const now = Date.now();
-  const randStr = Math.random().toString(36).substring(2, 34);
-  const msToken = randStr;
-  // ttwid 格式：1|时间戳|1|0|1|签名
-  const ttwid = '1%7C' + now + '%7C1%7C0%7C1%7C' + Math.random().toString(36).substring(2, 18);
-  return 'msToken=' + msToken + '; ttwid=' + ttwid + '; IsDouyinOpen=false; s_v_web_id=verify_' + randStr.substring(0, 20);
-}
-
-// ============================================================
-// 抖音专用请求（带完整浏览器指纹 + 动态 Cookie）
-// ============================================================
-async function douyinGet(urlStr) {
-  const headers = {
-    'User-Agent': UA,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-    'Accept-Language': 'zh-CN,zh;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-    'Referer': 'https://live.douyin.com/',
-    'sec-ch-ua': '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="24"',
-    'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"Windows"',
-    'sec-fetch-dest': 'document',
-    'sec-fetch-mode': 'navigate',
-    'sec-fetch-site': 'same-origin',
-    'sec-fetch-user': '?1',
-    'Upgrade-Insecure-Requests': '1',
-    'Cookie': genDouyinCookie()
-  };
-  try {
-    const resp = await fetch(urlStr, { headers: headers, redirect: 'follow' });
-    const body = await resp.text();
-    return { body: body, statusCode: resp.status, finalUrl: resp.url || urlStr };
-  } catch (e) {
-    return { body: '', statusCode: 0, finalUrl: urlStr };
-  }
-}
-
-// ============================================================
-// 解析抖音短链 / 抖音号 / 用户主页 → 真实 room_id（多级兜底）
-// ============================================================
 async function resolveDouyinRoomId(shortUrl) {
   const loadUrl = /^https?:\/\//.test(shortUrl) ? shortUrl : 'https://' + shortUrl;
   const resp = await douyinGet(loadUrl);
   const finalUrl = resp.finalUrl || loadUrl;
   const html = resp.body || '';
-
-  // ① 最终 URL 里直接带 room_id / live.douyin.com/{id}
   let ridFromUrl = finalUrl.match(/room_id=(\d+)/) || finalUrl.match(/live\.douyin\.com\/(\d+)/);
   if (ridFromUrl) return ridFromUrl[1];
-  // ② 页面里解析 web_rid / roomId（新版转义 JSON）
   const room = parseDouyinRoom(html);
   if (room && room.web_rid) return room.web_rid;
   const rid2 = html.match(/"web_rid"\s*:\s*"(\d+)"/) || html.match(/"roomId"\s*:\s*"?(\d+)"?/);
   if (rid2) return rid2[1];
-  // ③ 提取 UID 兜底
   const uidMatch = html.match(/douyin\.com\/user\/(\d+)/) || html.match(/"uid"\s*:\s*"?(\d+)"?/);
   if (uidMatch) return uidMatch[1];
-  throw new Error('无法从页面提取房间号，请尝试直接输入直播间链接或房间号');
+  throw new Error('无法从页面提取房间号');
 }
 
-// ============================================================
-// 抖音页面解析（多重兜底方案）
-// ============================================================
 function parseDouyinRoom(html) {
   if (!html || html.length < 1000) return null;
-
-  // 方案1：新版 RSC 转义 JSON（id_str marker）
   const marker1 = '\\"room\\":{\\"id_str\\"';
   let idx = html.indexOf(marker1);
   if (idx >= 0) {
@@ -158,8 +127,6 @@ function parseDouyinRoom(html) {
     const result = extractRoomFromJson(seg);
     if (result && result.status !== null) return result;
   }
-
-  // 方案2：直接找 "room":  非转义的 JSON 块
   const marker2 = '"room":{';
   idx = html.indexOf(marker2);
   if (idx >= 0) {
@@ -167,8 +134,6 @@ function parseDouyinRoom(html) {
     const result = extractRoomFromJson(seg);
     if (result && result.status !== null) return result;
   }
-
-  // 方案3：从 window.__INIT_PROPS__ 或 RENDER_DATA 中提取
   const initProps = html.match(/window\.__INIT_PROPS__\s*=\s*(\{.*?\})\s*;\s*</);
   if (initProps) {
     try {
@@ -177,28 +142,22 @@ function parseDouyinRoom(html) {
       if (roomInfo) return roomInfo;
     } catch (e) {}
   }
-
-  // 方案4：从 SSR 数据中提取（兜底：正则直接抓关键字段）
   const statusM = html.match(/"status"\s*:\s*(\d+)/);
   const titleM = html.match(/"title"\s*:\s*"([^"]{0,100})"/);
   const nickM = html.match(/"nickname"\s*:\s*"([^"]{0,60})"/);
   const avatarM = html.match(/"avatar_thumb"\s*:\s*\{[^}]*?"url_list"\s*:\s*\["([^"]+)"/);
   const webRidM = html.match(/"web_rid"\s*:\s*"(\d+)"/);
-
   if (statusM || titleM || nickM) {
     return {
       status: statusM ? parseInt(statusM[1], 10) : null,
-      title: titleM ? titleM[1] : '',
-      nickname: nickM ? nickM[1] : '',
+      title: titleM ? titleM[1] : '', nickname: nickM ? nickM[1] : '',
       avatar: avatarM ? avatarM[1].replace(/\\u002F/g, '/') : '',
       web_rid: webRidM ? webRidM[1] : ''
     };
   }
-
   return null;
 }
 
-// 从 JSON 片段中提取房间信息
 function extractRoomFromJson(seg) {
   const statusM = seg.match(/"status"\s*:\s*(\d+)/);
   const titleM = seg.match(/"title"\s*:\s*"([^"]{0,100})"/);
@@ -206,25 +165,21 @@ function extractRoomFromJson(seg) {
   const avatarM = seg.match(/"avatar_thumb"\s*:\s*\{[^}]*?"url_list"\s*:\s*\["([^"]+)"/);
   const webRidM = seg.match(/"web_rid"\s*:\s*"(\d+)"/);
   const idStrM = seg.match(/"id_str"\s*:\s*"(\d+)"/);
-
   return {
     status: statusM ? parseInt(statusM[1], 10) : null,
-    title: titleM ? titleM[1] : '',
-    nickname: nickM ? nickM[1] : '',
+    title: titleM ? titleM[1] : '', nickname: nickM ? nickM[1] : '',
     avatar: avatarM ? avatarM[1].replace(/\\u002F/g, '/') : '',
     web_rid: webRidM ? webRidM[1] : (idStrM ? idStrM[1] : '')
   };
 }
 
-// 递归查找对象中的 room 信息
 function findRoomInObject(obj) {
   if (!obj || typeof obj !== 'object') return null;
   if (obj.room && typeof obj.room === 'object') {
     const r = obj.room;
     return {
       status: r.status !== undefined ? parseInt(r.status, 10) : null,
-      title: r.title || '',
-      nickname: (r.owner && r.owner.nickname) || r.nickname || '',
+      title: r.title || '', nickname: (r.owner && r.owner.nickname) || r.nickname || '',
       avatar: (r.owner && r.owner.avatar_thumb && r.owner.avatar_thumb.url_list && r.owner.avatar_thumb.url_list[0]) ||
               (r.avatar_thumb && r.avatar_thumb.url_list && r.avatar_thumb.url_list[0]) || '',
       web_rid: r.web_rid || r.id_str || r.roomId || ''
@@ -238,108 +193,143 @@ function findRoomInObject(obj) {
 }
 
 // ============================================================
-// 检查单个订阅的直播状态（返回是否发生变化 0→1 或 1→0）
+// 检查单个 room 的状态(返回 { status, title, uname, avatar, cover })
 // ============================================================
-async function checkOneLive(sub) {
+async function checkOneRoom(platform, roomId) {
   try {
-    if (sub.platform === 'bilibili') {
-      const resp = await liveReq('https://api.live.bilibili.com/room/v1/Room/get_info?room_id=' + sub.roomId);
+    if (platform === 'bilibili') {
+      const resp = await liveReq('https://api.live.bilibili.com/room/v1/Room/get_info?room_id=' + roomId);
       if (resp && resp.code === 0 && resp.data) {
-        const st = resp.data.live_status === 1 ? 1 : 0;
-        const changed = sub.liveStatus !== st;
-        sub.liveStatus = st;
-        sub.title = resp.data.title || '';
-        if (resp.data.user_cover) sub.cover = resp.data.user_cover;
-        sub.avatar = sub.cover || sub.avatar || '';
-        // 补充主播昵称（best effort）
-        if (!sub.uname && resp.data.uid) {
+        const result = {
+          liveStatus: resp.data.live_status === 1 ? 1 : 0,
+          title: resp.data.title || '',
+          cover: resp.data.user_cover || '',
+          avatar: resp.data.user_cover || '',
+          uname: ''
+        };
+        if (resp.data.uid) {
           try {
             const ui = await liveReq('https://api.live.bilibili.com/live_user/v1/Master/info?uid=' + resp.data.uid);
-            if (ui && ui.code === 0 && ui.data && ui.data.info && ui.data.info.uname) sub.uname = ui.data.info.uname;
+            if (ui && ui.code === 0 && ui.data && ui.data.info && ui.data.info.uname) result.uname = ui.data.info.uname;
           } catch (e) {}
         }
-        return changed;
+        return result;
       }
-    } else if (sub.platform === 'douyin') {
-      const pageResp = await douyinGet('https://live.douyin.com/' + sub.roomId);
+    } else if (platform === 'douyin') {
+      const pageResp = await douyinGet('https://live.douyin.com/' + roomId);
       const room = parseDouyinRoom(pageResp.body || '');
-      const st2 = (room && room.status === 2) ? 1 : 0;
-      const changed2 = sub.liveStatus !== st2;
-      sub.liveStatus = st2;
-      if (room && room.title) sub.title = room.title;
-      if (room && room.nickname) sub.uname = room.nickname;
-      if (room && room.avatar) sub.avatar = room.avatar;
-      return changed2;
+      return {
+        liveStatus: (room && room.status === 2) ? 1 : 0,
+        title: (room && room.title) || '',
+        avatar: (room && room.avatar) || '',
+        cover: '', uname: (room && room.nickname) || ''
+      };
     }
   } catch (e) {}
-  return false;
+  return null;
 }
 
 // ============================================================
-// 检查所有订阅（顺序执行，间隔 2 秒，省内存不并发）
+// 检查所有订阅(按 room 去重 → 检测 → 按订阅者推送)
 // ============================================================
-let checking = false;   // 防止并发检查
+let checking = false;
 async function checkAllLive() {
   if (checking) return;
   checking = true;
   try {
-    if (liveSubs.length === 0) return;
-    for (let i = 0; i < liveSubs.length; i++) {
-    const sub = liveSubs[i];
-    const changed = await checkOneLive(sub);
-    // 0→1 变化触发，或首次检查已在直播也触发
-    if ((changed || (liveFirstCheck && sub.liveStatus === 1)) && sub.liveStatus === 1) {
-      broadcast('live-started', { id: sub.id, platform: sub.platform, roomId: sub.roomId, uname: sub.uname, title: sub.title, cover: sub.cover, avatar: sub.avatar });
+    const rooms = store.getAllSubsGroupedByRoom();
+    if (rooms.length === 0) return;
+
+    for (let i = 0; i < rooms.length; i++) {
+      const room = rooms[i];
+      const info = await checkOneRoom(room.platform, room.roomId);
+      if (!info) {
+        if (i < rooms.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
+        continue;
+      }
+
+      // 遍历订阅该 room 的所有用户
+      for (const owner of room.owners) {
+        const userId = owner.userId;
+        const sub = owner.sub;
+        const prevStatus = sub.liveStatus || 0;
+        const changed = prevStatus !== info.liveStatus;
+
+        // 更新该用户该 sub 的状态
+        store.updateSub(userId, sub.id, {
+          liveStatus: info.liveStatus,
+          title: info.title || sub.title || '',
+          uname: info.uname || sub.uname || '',
+          avatar: info.avatar || sub.avatar || '',
+          cover: info.cover || sub.cover || ''
+        });
+
+        // 0→1 或 首次检查已在直播 → 触发提醒
+        const shouldAlert = (changed || (liveFirstCheck && info.liveStatus === 1)) && info.liveStatus === 1;
+        if (shouldAlert) {
+          // SSE 推给该用户
+          broadcastToUser(userId, 'live-started', {
+            id: sub.id, platform: sub.platform, roomId: sub.roomId,
+            uname: info.uname || sub.uname || '', title: info.title || '',
+            cover: info.cover || sub.cover || '', avatar: info.avatar || sub.avatar || ''
+          });
+          // 服务器主动推送(用该用户的 pushKey)
+          const cfg = store.getPushConfig(userId);
+          if (cfg.pushType && cfg.pushKey) {
+            const title = '开播提醒: ' + (info.uname || sub.uname || sub.roomId);
+            const desp = (sub.platform || '') + ' 主播 ' + (info.uname || sub.uname || sub.roomId) +
+              ' 开播了\n标题: ' + (info.title || '无') + '\n房间号: ' + sub.roomId;
+            push.pushAlert(cfg.pushType, cfg.pushKey, title, desp);
+          }
+        }
+        if (changed && info.liveStatus === 0) {
+          broadcastToUser(userId, 'live-ended', { id: sub.id });
+        }
+        if (changed || liveFirstCheck) {
+          broadcastToUser(userId, 'live-status-update', {
+            id: sub.id, liveStatus: info.liveStatus, title: info.title || '',
+            uname: info.uname || '', cover: info.cover || '', avatar: info.avatar || ''
+          });
+        }
+      }
+      if (i < rooms.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
     }
-    if (changed && sub.liveStatus === 0) {
-      broadcast('live-ended', { id: sub.id });
-    }
-    // 只有状态变化或首次检查时才推送更新，避免频繁推送导致前端头像闪烁
-    if (changed || liveFirstCheck) {
-      broadcast('live-status-update', { id: sub.id, liveStatus: sub.liveStatus, title: sub.title, uname: sub.uname, cover: sub.cover, avatar: sub.avatar });
-    }
-    if (i < liveSubs.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
-    }
-    saveLiveSubs();
     liveFirstCheck = false;
-    broadcast('live-subs-updated', {});
+    broadcastAll('live-subs-updated', {});
   } finally {
     checking = false;
   }
 }
 
 // ============================================================
-// 持久化
+// SSE:按 userId 分发
 // ============================================================
-function loadLiveSubs() {
-  try { liveSubs = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); }
-  catch (e) { liveSubs = []; }
-  if (!Array.isArray(liveSubs)) liveSubs = [];
-}
-function saveLiveSubs() {
-  try { fs.writeFileSync(DATA_FILE, JSON.stringify(liveSubs, null, 2), 'utf8'); } catch (e) {}
-}
-
-// ============================================================
-// SSE 广播
-// ============================================================
-function broadcast(event, data) {
+function broadcastToUser(userId, event, data) {
   const payload = 'event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n';
   for (let i = sseClients.length - 1; i >= 0; i--) {
     const c = sseClients[i];
-    try { c.res.write(payload); }
-    catch (e) { sseClients.splice(i, 1); }
+    if (c.userId !== userId) continue;
+    try { c.res.write(payload); } catch (e) { sseClients.splice(i, 1); }
+  }
+}
+
+function broadcastAll(event, data) {
+  const payload = 'event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n';
+  for (let i = sseClients.length - 1; i >= 0; i--) {
+    const c = sseClients[i];
+    try { c.res.write(payload); } catch (e) { sseClients.splice(i, 1); }
   }
 }
 
 // ============================================================
-// HTTP 路由
+// HTTP 工具
 // ============================================================
 function sendJson(res, code, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
   res.end(body);
 }
+
 function readBody(req) {
   return new Promise(function (resolve) {
     let d = '';
@@ -350,49 +340,78 @@ function readBody(req) {
   });
 }
 
+function getUserId(req) {
+  // 优先从 header 拿(普通 fetch)
+  let uid = (req.headers['x-user-id'] || '').trim();
+  if (uid) return uid;
+  // 兜底从 URL query 拿(EventSource 不支持自定义 header)
+  try {
+    const u = new URL(req.url, 'http://localhost');
+    uid = (u.searchParams.get('userId') || '').trim();
+  } catch (e) {}
+  return uid;
+}
+
+function genUserId() {
+  return crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).substring(2, 10));
+}
+
+// ============================================================
+// API 路由
+// ============================================================
 function handleApi(req, res, pathname) {
   const method = req.method;
-  const parts = pathname.split('/').filter(Boolean); // ['api', 'subs', ...]
+  const parts = pathname.split('/').filter(Boolean);
+  const userId = getUserId(req);
+
+  // GET /api/whoami  - 返回/生成 userId(前端首次访问用来拿 UUID)
+  if (method === 'GET' && parts[1] === 'whoami' && parts.length === 2) {
+    let uid = userId;
+    if (!uid) uid = genUserId();
+    // 确保用户在 store 里存在
+    store.getUser(uid);
+    return sendJson(res, 200, { success: true, userId: uid });
+  }
+
+  // 没带 userId 的请求(除了 whoami)都拒绝
+  if (!userId) return sendJson(res, 401, { success: false, error: '缺少 X-User-Id,请刷新页面' });
 
   // GET /api/subs
   if (method === 'GET' && parts[1] === 'subs' && parts.length === 2) {
-    return sendJson(res, 200, { success: true, subs: liveSubs.map(function (s) {
+    const subs = store.getSubs(userId);
+    return sendJson(res, 200, { success: true, subs: subs.map(function (s) {
       return { id: s.id, platform: s.platform, roomId: s.roomId, uname: s.uname || '', avatar: s.avatar || '', cover: s.cover || '', liveStatus: s.liveStatus, title: s.title || '', remark: s.remark || '' };
     }) });
   }
 
-  // POST /api/subs/sync  { subs: [{id, platform, roomId, remark}] }
-  // 客户端权威模式：手机把本地订阅列表同步给服务端，服务端据此轮询检测。
-  // 订阅数据保存在手机浏览器 localStorage，服务端重启/休眠不丢数据（适配免费托管）。
+  // POST /api/subs/sync
   if (method === 'POST' && parts[1] === 'subs' && parts[2] === 'sync') {
     return readBody(req).then(async function (body) {
       const incoming = Array.isArray(body.subs) ? body.subs : [];
+      const existingSubs = store.getSubs(userId);
       const next = [];
       const seen = {};
       for (const s of incoming) {
         if (!s || !s.roomId) continue;
-        const key = (s.platform === 'douyin' ? 'douyin' : 'bilibili') + ':' + String(s.roomId);
+        const pf = s.platform === 'douyin' ? 'douyin' : 'bilibili';
+        const key = pf + ':' + String(s.roomId);
         if (seen[key]) continue;
         seen[key] = true;
-        const existing = liveSubs.find(function (x) { return x.platform === (s.platform === 'douyin' ? 'douyin' : 'bilibili') && x.roomId === String(s.roomId); });
+        const existing = existingSubs.find(function (x) { return x.platform === pf && x.roomId === String(s.roomId); });
         next.push({
           id: s.id || (Date.now().toString() + Math.floor(Math.random() * 1000)),
-          platform: s.platform === 'douyin' ? 'douyin' : 'bilibili',
-          roomId: String(s.roomId),
-          remark: (s.remark || '').trim(),
-          uname: existing ? existing.uname : '',
-          avatar: existing ? existing.avatar : '',
-          cover: existing ? existing.cover : '',
-          liveStatus: existing ? existing.liveStatus : 0,
+          platform: pf, roomId: String(s.roomId), remark: (s.remark || '').trim(),
+          uname: existing ? existing.uname : '', avatar: existing ? existing.avatar : '',
+          cover: existing ? existing.cover : '', liveStatus: existing ? existing.liveStatus : 0,
           title: existing ? existing.title : ''
         });
       }
-      liveSubs = next;
-      saveLiveSubs();
-      if (liveSubs.length > 0 && !liveTimer) startLiveChecker();
+      store.setSubs(userId, next);
+      if (next.length > 0 && !liveTimer) startLiveChecker();
       await checkAllLive();
-      broadcast('live-subs-updated', {});
-      return sendJson(res, 200, { success: true, subs: liveSubs.map(function (s) {
+      broadcastToUser(userId, 'live-subs-updated', {});
+      const subs = store.getSubs(userId);
+      return sendJson(res, 200, { success: true, subs: subs.map(function (s) {
         return { id: s.id, platform: s.platform, roomId: s.roomId, uname: s.uname || '', avatar: s.avatar || '', cover: s.cover || '', liveStatus: s.liveStatus, title: s.title || '', remark: s.remark || '' };
       }) });
     });
@@ -402,36 +421,40 @@ function handleApi(req, res, pathname) {
   if (method === 'POST' && parts[1] === 'subs' && parts.length === 2) {
     return readBody(req).then(async function (body) {
       const parsed = parseLiveInput(body.input || '');
-      if (!parsed) return sendJson(res, 200, { success: false, error: '无法识别链接，请输入B站或抖音直播间链接/房间号' });
+      if (!parsed) return sendJson(res, 200, { success: false, error: '无法识别链接,请输入B站或抖音直播间链接/房间号' });
       if (parsed.needResolve) {
         try { parsed.roomId = await resolveDouyinRoomId(parsed.url); }
-        catch (e) { return sendJson(res, 200, { success: false, error: '抖音链接解析失败，请尝试直接输入房间号' }); }
+        catch (e) { return sendJson(res, 200, { success: false, error: '抖音链接解析失败,请尝试直接输入房间号' }); }
       }
-      const existing = liveSubs.find(function (s) { return s.platform === parsed.platform && s.roomId === parsed.roomId; });
+      const subs = store.getSubs(userId);
+      const existing = subs.find(function (s) { return s.platform === parsed.platform && s.roomId === parsed.roomId; });
       if (existing) return sendJson(res, 200, { success: false, error: '该直播间已添加过啦' });
       const sub = { id: Date.now().toString() + Math.floor(Math.random() * 1000), platform: parsed.platform, roomId: parsed.roomId, uname: '', avatar: '', cover: '', liveStatus: 0, title: '', remark: '' };
-      await checkOneLive(sub);
-      liveSubs.push(sub);
-      saveLiveSubs();
-      if (liveSubs.length === 1 && !liveTimer) startLiveChecker();
-      broadcast('live-subs-updated', {});
+      // 检查一次状态
+      const info = await checkOneRoom(sub.platform, sub.roomId);
+      if (info) {
+        sub.liveStatus = info.liveStatus; sub.title = info.title || '';
+        sub.uname = info.uname || ''; sub.avatar = info.avatar || ''; sub.cover = info.cover || '';
+      }
+      store.addSub(userId, sub);
+      if (store.getSubs(userId).length === 1 && !liveTimer) startLiveChecker();
+      broadcastToUser(userId, 'live-subs-updated', {});
       return sendJson(res, 200, { success: true, sub: sub });
     });
   }
 
   // DELETE /api/subs/:id
   if (method === 'DELETE' && parts[1] === 'subs' && parts.length === 3) {
-    const idx = liveSubs.findIndex(function (s) { return s.id === parts[2]; });
-    if (idx >= 0) { liveSubs.splice(idx, 1); saveLiveSubs(); }
-    broadcast('live-subs-updated', {});
+    store.removeSub(userId, parts[2]);
+    broadcastToUser(userId, 'live-subs-updated', {});
     return sendJson(res, 200, { success: true });
   }
 
-  // PATCH /api/subs/:id/remark  { remark }
+  // PATCH /api/subs/:id/remark
   if (method === 'PATCH' && parts[1] === 'subs' && parts.length === 4 && parts[3] === 'remark') {
     return readBody(req).then(function (body) {
-      const sub = liveSubs.find(function (s) { return s.id === parts[2]; });
-      if (sub) { sub.remark = (body.remark || '').trim(); saveLiveSubs(); broadcast('live-subs-updated', {}); return sendJson(res, 200, { success: true }); }
+      const ok = store.updateSub(userId, parts[2], { remark: (body.remark || '').trim() });
+      if (ok) { broadcastToUser(userId, 'live-subs-updated', {}); return sendJson(res, 200, { success: true }); }
       return sendJson(res, 200, { success: false });
     });
   }
@@ -442,22 +465,49 @@ function handleApi(req, res, pathname) {
     return sendJson(res, 200, { success: true });
   }
 
-  // GET /api/events  (SSE)
+  // GET /api/events (SSE)
   if (method === 'GET' && parts[1] === 'events') {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
+      'Cache-Control': 'no-cache', 'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'X-User-Id'
     });
     res.write(': connected\n\n');
-    const client = { res: res };
+    const client = { res: res, userId: userId };
     sseClients.push(client);
     req.on('close', function () {
       const i = sseClients.indexOf(client);
       if (i >= 0) sseClients.splice(i, 1);
     });
     return;
+  }
+
+  // ===== 推送配置接口 =====
+  // GET /api/push-config
+  if (method === 'GET' && parts[1] === 'push-config' && parts.length === 2) {
+    const cfg = store.getPushConfig(userId);
+    return sendJson(res, 200, { success: true, config: { pushType: cfg.pushType, pushKey: cfg.pushKey } });
+  }
+  // POST /api/push-config
+  if (method === 'POST' && parts[1] === 'push-config' && parts.length === 2) {
+    return readBody(req).then(function (body) {
+      const cfg = { pushType: (body.pushType || '').trim(), pushKey: (body.pushKey || '').trim() };
+      if (cfg.pushType && !['serverchan', 'pushplus', 'bark'].includes(cfg.pushType)) {
+        return sendJson(res, 200, { success: false, message: '推送方式不支持' });
+      }
+      store.setPushConfig(userId, cfg);
+      return sendJson(res, 200, { success: true });
+    });
+  }
+  // POST /api/push-config/test
+  if (method === 'POST' && parts[1] === 'push-config' && parts[2] === 'test') {
+    return readBody(req).then(function (body) {
+      const cfg = { pushType: (body.pushType || '').trim(), pushKey: (body.pushKey || '').trim() };
+      push.testPush(cfg.pushType, cfg.pushKey, function (ok, msg) {
+        return sendJson(res, 200, { success: ok, message: msg });
+      });
+    });
   }
 
   return sendJson(res, 404, { success: false, error: 'not found' });
@@ -477,6 +527,15 @@ function handleStatic(req, res, pathname) {
 }
 
 function handleRequest(req, res) {
+  // CORS 预检
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-User-Id'
+    });
+    return res.end();
+  }
   const u = new URL(req.url, 'http://localhost');
   const pathname = u.pathname;
   if (pathname.startsWith('/api/')) return handleApi(req, res, pathname);
@@ -484,24 +543,27 @@ function handleRequest(req, res) {
 }
 
 // ============================================================
-// 启动 / 停止
+// 启动
 // ============================================================
 function startLiveChecker() {
   if (liveTimer) return;
-  loadLiveSubs();
-  if (liveSubs.length > 0) setTimeout(checkAllLive, 3000);
-  liveTimer = setInterval(function () { if (liveSubs.length > 0) checkAllLive(); }, POLL_INTERVAL);
+  store.load();
+  const rooms = store.getAllSubsGroupedByRoom();
+  if (rooms.length > 0) setTimeout(checkAllLive, 3000);
+  liveTimer = setInterval(function () {
+    const rooms2 = store.getAllSubsGroupedByRoom();
+    if (rooms2.length > 0) checkAllLive();
+  }, POLL_INTERVAL);
 }
 function stopLiveChecker() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
 
-// ---- 启动 ----
-loadLiveSubs();
+store.load();
 const server = http.createServer(handleRequest);
 server.listen(PORT, '0.0.0.0', function () {
-  console.log('📡 直播订阅服务已启动');
-  console.log('   本机访问:   http://localhost:' + PORT);
-  console.log('   手机访问:   http://<本机局域网IP>:' + PORT);
-  console.log('   当前订阅:   ' + liveSubs.length + ' 个');
+  console.log('📡 直播订阅服务(多用户版)已启动');
+  console.log('   端口: ' + PORT);
+  const rooms = store.getAllSubsGroupedByRoom();
+  console.log('   当前订阅房间数(去重): ' + rooms.length);
   startLiveChecker();
 });
 

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#FF6B9D">
+<title>推送设置 · 直播订阅</title>
+<style>
+:root{--pink-1:#FBE6EE;--rose:#FF6B9D;--rose-d:#E8557F;--ink:#5a3a4a;--ink-2:#9a6a7a;--ink-3:#bf9aab;--card:#FFFFFF;--line:#F3D9E5;--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px)}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",-apple-system,sans-serif;color:var(--ink);background:radial-gradient(600px 300px at 90% -5%,var(--pink-1),transparent 60%),linear-gradient(180deg,#FFF9FB 0%,#FFF3F7 100%);min-height:100vh;padding-bottom:calc(40px + var(--safe-bottom))}
+.app{max-width:480px;margin:0 auto;padding:0 16px}
+header{position:sticky;top:0;z-index:30;background:linear-gradient(135deg,rgba(255,107,157,.94),rgba(255,143,177,.94));color:#fff;padding:calc(14px + var(--safe-top)) 16px 14px;margin:0 -16px 14px;box-shadow:0 4px 18px rgba(255,107,157,.25);display:flex;align-items:center;gap:10px}
+header .back{font-size:20px;text-decoration:none;color:#fff;padding:4px 8px}
+header .title{font-size:18px;font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 2px 10px rgba(255,107,157,.06)}
+.card h2{font-size:15px;margin-bottom:10px;color:var(--rose-d)}
+.card p{font-size:13px;color:var(--ink-2);line-height:1.6;margin-bottom:10px}
+.card a{color:var(--rose-d);text-decoration:underline;word-break:break-all}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.field input[type=text]{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;background:#FFFBFC;color:var(--ink)}
+.field input[type=text]:focus{outline:none;border-color:var(--rose);box-shadow:0 0 0 3px rgba(255,107,157,.12)}
+.radio-group{display:flex;flex-direction:column;gap:8px}
+.radio-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:#FFFBFC;cursor:pointer}
+.radio-item.active{border-color:var(--rose);background:#FFF6F9}
+.radio-item input{width:18px;height:18px;accent-color:var(--rose)}
+.radio-item .info{flex:1}
+.radio-item .name{font-size:14px;font-weight:600;color:var(--ink)}
+.radio-item .desc{font-size:11px;color:var(--ink-3);margin-top:2px}
+.btn{display:block;width:100%;padding:13px;border:none;border-radius:12px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;margin-top:6px}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:linear-gradient(135deg,var(--rose),var(--rose-d));color:#fff;box-shadow:0 4px 14px rgba(255,107,157,.3)}
+.btn-secondary{background:var(--card);color:var(--rose-d);border:1.5px solid var(--line)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.toast{position:fixed;left:50%;bottom:calc(30px + var(--safe-bottom));transform:translateX(-50%);background:rgba(90,58,74,.95);color:#fff;padding:10px 18px;border-radius:24px;font-size:13px;z-index:100;opacity:0;transition:opacity .3s;pointer-events:none;max-width:90%;text-align:center}
+.toast.show{opacity:1}
+.note{font-size:11px;color:var(--ink-3);line-height:1.6;background:#FFF6F9;border:1px dashed var(--pink-1);border-radius:10px;padding:10px 12px;margin-top:14px}
+.userid-box{font-size:11px;color:var(--ink-3);background:#FFF6F9;border:1px dashed var(--pink-1);border-radius:8px;padding:8px 10px;margin-top:10px;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <a href="/" class="back">‹</a>
+    <div class="title">推送设置</div>
+  </header>
+  <div class="card">
+    <h2>📌 选择推送方式</h2>
+    <p>开播时,服务器会按你的配置主动推送到你的微信/手机,即使关闭网页也能收到。每个用户的配置相互独立。</p>
+    <div class="radio-group" id="pushTypeGroup">
+      <label class="radio-item"><input type="radio" name="pushType" value="serverchan"><div class="info"><div class="name">Server酱 → 微信</div><div class="desc">扫码登录拿 sendkey,免费 5 条/天,安卓首选</div></div></label>
+      <label class="radio-item"><input type="radio" name="pushType" value="pushplus"><div class="info"><div class="name">PushPlus → 微信</div><div class="desc">扫码登录拿 token,免费 200 条/天</div></div></label>
+      <label class="radio-item"><input type="radio" name="pushType" value="bark"><div class="info"><div class="name">Bark → iOS 通知</div><div class="desc">App Store 装 Bark App,自建或用官方,无限</div></div></label>
+    </div>
+  </div>
+  <div class="card">
+    <h2>🔑 填写 Key</h2>
+    <div class="field">
+      <label>推送 Key</label>
+      <input type="text" id="pushKey" placeholder="请先选择上方推送方式">
+    </div>
+    <button class="btn btn-secondary" id="testBtn">测试推送</button>
+    <div class="note" id="howto"></div>
+  </div>
+  <div class="card">
+    <button class="btn btn-primary" id="saveBtn">保存设置</button>
+  </div>
+  <div class="note">
+    💡 <b>使用说明</b><br>
+    1. 上面选一个推送方式,按提示拿到 key<br>
+    2. 粘贴 key 到输入框,点"测试推送"<br>
+    3. 收到测试消息 → 点"保存设置"<br>
+    4. 以后你订阅的主播开播,自动推送到你的渠道<br><br>
+    🔒 你的配置只对你自己生效,其他用户互不影响
+  </div>
+  <div class="userid-box" id="userIdBox">用户 ID 加载中...</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+// ---- 用户 ID ----
+function getUserId(){
+  let uid = localStorage.getItem('liveUserId');
+  if(!uid){
+    // 生成 UUID
+    if(window.crypto && crypto.randomUUID){ uid = crypto.randomUUID(); }
+    else {
+      uid = 'u-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2,12);
+    }
+    localStorage.setItem('liveUserId', uid);
+  }
+  return uid;
+}
+function apiHeaders(extra){
+  return Object.assign({ 'Content-Type':'application/json', 'X-User-Id': getUserId() }, extra || {});
+}
+
+const howtoMap = {
+  serverchan: '📌 <b>Server酱</b><br>1. 微信扫码登录 <a href="https://sct.ft07.com" target="_blank">sct.ft07.com</a><br>2. 登录后复制 SendKey<br>3. 粘贴到上方输入框',
+  pushplus: '📌 <b>PushPlus</b><br>1. 微信扫码登录 <a href="https://www.pushplus.plus" target="_blank">pushplus.plus</a><br>2. 复制一对一推送 token<br>3. 粘贴到上方输入框',
+  bark: '📌 <b>Bark</b><br>1. App Store 装 Bark<br>2. 打开 App 复制首页 URL<br>3. 粘贴完整 URL 或末尾 key'
+};
+function showToast(m){const t=document.getElementById('toast');t.innerHTML=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+function updateRadioUI(){
+  document.querySelectorAll('.radio-item').forEach(i=>{const r=i.querySelector('input');i.classList.toggle('active',r.checked)});
+  const sel=document.querySelector('input[name=pushType]:checked');
+  document.getElementById('howto').innerHTML=sel?howtoMap[sel.value]:'';
+  const ph={serverchan:'粘贴 SCT 开头的 sendkey',pushplus:'粘贴 PushPlus token',bark:'粘贴 bark key 或完整 URL'};
+  if(sel)document.getElementById('pushKey').placeholder=ph[sel.value];
+}
+document.querySelectorAll('input[name=pushType]').forEach(r=>r.addEventListener('change',updateRadioUI));
+async function loadConfig(){
+  // 显示 userId
+  const uid = getUserId();
+  document.getElementById('userIdBox').innerHTML = '🆔 你的用户 ID:<br><b>' + uid + '</b><br><span style="color:var(--ink-3)">换了浏览器/清了缓存会变成新用户,需重新配置</span>';
+  try{
+    const r=await fetch('/api/push-config',{headers:apiHeaders()});
+    const d=await r.json();
+    if(d.success&&d.config){
+      if(d.config.pushType){const r=document.querySelector('input[name=pushType][value="'+d.config.pushType+'"]');if(r)r.checked=true}
+      document.getElementById('pushKey').value=d.config.pushKey||'';
+      updateRadioUI();
+    }
+  }catch(e){}
+}
+document.getElementById('testBtn').addEventListener('click',async()=>{
+  const sel=document.querySelector('input[name=pushType]:checked');
+  const key=document.getElementById('pushKey').value.trim();
+  if(!sel){showToast('请先选择推送方式');return}
+  if(!key){showToast('请填写 key');return}
+  const btn=document.getElementById('testBtn');
+  btn.disabled=true;btn.textContent='发送中...';
+  try{
+    const r=await fetch('/api/push-config/test',{method:'POST',headers:apiHeaders(),body:JSON.stringify({pushType:sel.value,pushKey:key})});
+    const d=await r.json();
+    showToast(d.message||(d.success?'已发送测试':'测试失败'));
+  }catch(e){showToast('请求失败')}
+  btn.disabled=false;btn.textContent='测试推送';
+});
+document.getElementById('saveBtn').addEventListener('click',async()=>{
+  const sel=document.querySelector('input[name=pushType]:checked');
+  const key=document.getElementById('pushKey').value.trim();
+  if(!sel){showToast('请先选择推送方式');return}
+  if(!key){showToast('请填写 key');return}
+  try{
+    const r=await fetch('/api/push-config',{method:'POST',headers:apiHeaders(),body:JSON.stringify({pushType:sel.value,pushKey:key})});
+    const d=await r.json();
+    showToast(d.success?'已保存 ✓':(d.message||'保存失败'));
+  }catch(e){showToast('请求失败')}
+});
+loadConfig();updateRadioUI();
+</script>
+</body>
+</html>
