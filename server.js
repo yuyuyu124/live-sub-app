@@ -255,17 +255,37 @@ async function checkAllLive() {
         const prevStatus = sub.liveStatus || 0;
         const changed = prevStatus !== info.liveStatus;
 
-        // 更新该用户该 sub 的状态
+        // 单次直播期间只推一次:用 liveNotified 标记位
+        // - prevStatus=0 + info=1 且未通知过 → 触发提醒,并置 liveNotified=true
+        // - 启动时已在直播(liveFirstCheck + info=1) → 不推,但置 liveNotified=true
+        //   避免下一次轮询仍把它当"未通知过"误推
+        // - 下播 1→0 → 清 liveNotified=false,下次开播才能再推
+        // - 持续 1→1 且已通知 → 跳过
+        const startLiveAndAlreadyNotified = liveFirstCheck && info.liveStatus === 1;
+        const shouldAlert = changed
+          && info.liveStatus === 1
+          && prevStatus === 0
+          && !sub.liveNotified
+          && !startLiveAndAlreadyNotified;
+
+        // 计算新的 liveNotified 值(随状态一起写入)
+        let newNotified = !!sub.liveNotified;
+        if (info.liveStatus === 1 && (shouldAlert || startLiveAndAlreadyNotified)) {
+          newNotified = true;
+        } else if (info.liveStatus === 0) {
+          newNotified = false;
+        }
+
+        // 更新该用户该 sub 的状态(含 liveNotified)
         store.updateSub(userId, sub.id, {
           liveStatus: info.liveStatus,
+          liveNotified: newNotified,
           title: info.title || sub.title || '',
           uname: info.uname || sub.uname || '',
           avatar: info.avatar || sub.avatar || '',
           cover: info.cover || sub.cover || ''
         });
 
-        // 0→1 或 首次检查已在直播 → 触发提醒
-        const shouldAlert = (changed || (liveFirstCheck && info.liveStatus === 1)) && info.liveStatus === 1;
         if (shouldAlert) {
           // SSE 推给该用户
           broadcastToUser(userId, 'live-started', {
