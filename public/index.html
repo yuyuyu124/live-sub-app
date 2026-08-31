@@ -265,6 +265,7 @@ header .sub{font-size:11px;opacity:.85;margin-top:2px}
         <div class="setting-info">
           <div class="si-title">微信/手机推送</div>
           <div class="si-desc">关掉网页也能收到开播提醒(多用户各自独立)</div>
+          <div class="si-sub" id="pushPrefsText" style="font-size:11px;color:var(--ink-3);margin-top:2px">下播提醒：<b>关</b>(可在设置页开启)</div>
         </div>
         <span class="push-status off" id="pushStatusBadge">未配置</span>
       </a>
@@ -569,7 +570,7 @@ function updateBadge(count){
   badge.classList.toggle('hidden', count === 0);
 }
 
-/* ---- 拉取推送配置状态(显示已配置/未配置徽标) ---- */
+/* ---- 拉取推送配置状态(显示已配置/未配置徽标 + 下播提醒开关) ---- */
 function loadPushStatus(){
   fetch(API + '/api/push-config', { headers: apiHeaders() })
     .then(function(r){ return r.json(); })
@@ -581,6 +582,18 @@ function loadPushStatus(){
       } else {
         badge.textContent = '未配置';
         badge.className = 'push-status off';
+      }
+    })
+    .catch(function(){});
+  fetch(API + '/api/preferences', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var el = document.getElementById('pushPrefsText');
+      if(!el || !d.success || !d.preferences) return;
+      if(d.preferences.endedAlert){
+        el.innerHTML = '下播提醒：<b style="color:var(--rose-d)">开</b>(会在下播时也推送一条通知)';
+      } else {
+        el.innerHTML = '下播提醒：<b>关</b>(可在设置页开启)';
       }
     })
     .catch(function(){});
