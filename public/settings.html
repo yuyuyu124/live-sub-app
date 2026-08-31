@@ -28,6 +28,11 @@ header .title{font-size:18px;font-weight:700}
 .radio-item .info{flex:1}
 .radio-item .name{font-size:14px;font-weight:600;color:var(--ink)}
 .radio-item .desc{font-size:11px;color:var(--ink-3);margin-top:2px}
+.check-item{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:#FFFBFC;cursor:pointer}
+.check-item input{width:18px;height:18px;accent-color:var(--rose);margin-top:2px;flex-shrink:0}
+.check-item .info{flex:1}
+.check-item .name{font-size:14px;font-weight:600;color:var(--ink)}
+.check-item .desc{font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.5}
 .btn{display:block;width:100%;padding:13px;border:none;border-radius:12px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;margin-top:6px}
 .btn:active{transform:scale(.98)}
 .btn-primary{background:linear-gradient(135deg,var(--rose),var(--rose-d));color:#fff;box-shadow:0 4px 14px rgba(255,107,157,.3)}
@@ -62,6 +67,16 @@ header .title{font-size:18px;font-weight:700}
     </div>
     <button class="btn btn-secondary" id="testBtn">测试推送</button>
     <div class="note" id="howto"></div>
+  </div>
+  <div class="card">
+    <h2>⚙️ 附加选项</h2>
+    <label class="check-item">
+      <input type="checkbox" id="endedAlert">
+      <div class="info">
+        <div class="name">下播时也提醒我</div>
+        <div class="desc">主播从直播变为下播时,也会推送一条通知(默认关闭)</div>
+      </div>
+    </label>
   </div>
   <div class="card">
     <button class="btn btn-primary" id="saveBtn">保存设置</button>
@@ -122,6 +137,14 @@ async function loadConfig(){
       updateRadioUI();
     }
   }catch(e){}
+  // 加载 preferences(下播提醒等)
+  try{
+    const r2=await fetch('/api/preferences',{headers:apiHeaders()});
+    const d2=await r2.json();
+    if(d2.success&&d2.preferences){
+      document.getElementById('endedAlert').checked = !!d2.preferences.endedAlert;
+    }
+  }catch(e){}
 }
 document.getElementById('testBtn').addEventListener('click',async()=>{
   const sel=document.querySelector('input[name=pushType]:checked');
@@ -142,11 +165,20 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
   const key=document.getElementById('pushKey').value.trim();
   if(!sel){showToast('请先选择推送方式');return}
   if(!key){showToast('请填写 key');return}
+  const btn=document.getElementById('saveBtn');
+  btn.disabled=true;btn.textContent='保存中...';
   try{
     const r=await fetch('/api/push-config',{method:'POST',headers:apiHeaders(),body:JSON.stringify({pushType:sel.value,pushKey:key})});
     const d=await r.json();
-    showToast(d.success?'已保存 ✓':(d.message||'保存失败'));
+    if(!d.success){showToast(d.message||'保存失败');btn.disabled=false;btn.textContent='保存设置';return}
+    // 再保存 preferences(下播提醒等)
+    const endedAlert = document.getElementById('endedAlert').checked;
+    const r2=await fetch('/api/preferences',{method:'POST',headers:apiHeaders(),body:JSON.stringify({endedAlert:endedAlert})});
+    const d2=await r2.json();
+    if(!d2.success){showToast('偏好保存失败');btn.disabled=false;btn.textContent='保存设置';return}
+    showToast('已保存 ✓');
   }catch(e){showToast('请求失败')}
+  btn.disabled=false;btn.textContent='保存设置';
 });
 loadConfig();updateRadioUI();
 </script>

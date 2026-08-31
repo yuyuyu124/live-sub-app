@@ -304,6 +304,17 @@ async function checkAllLive() {
         }
         if (changed && info.liveStatus === 0) {
           broadcastToUser(userId, 'live-ended', { id: sub.id });
+          // 下播时主动推送(仅当该用户开了 endedAlert 且配置了推送)
+          const prefs = store.getPreferences(userId);
+          if (prefs.endedAlert) {
+            const cfg = store.getPushConfig(userId);
+            if (cfg.pushType && cfg.pushKey) {
+              const title = '下播提醒: ' + (info.uname || sub.uname || sub.roomId);
+              const desp = (sub.platform || '') + ' 主播 ' + (info.uname || sub.uname || sub.roomId) +
+                ' 下播了\n本次直播标题: ' + (sub.title || info.title || '无') + '\n房间号: ' + sub.roomId;
+              push.pushAlert(cfg.pushType, cfg.pushKey, title, desp);
+            }
+          }
         }
         if (changed || liveFirstCheck) {
           broadcastToUser(userId, 'live-status-update', {
@@ -527,6 +538,22 @@ function handleApi(req, res, pathname) {
       push.testPush(cfg.pushType, cfg.pushKey, function (ok, msg) {
         return sendJson(res, 200, { success: ok, message: msg });
       });
+    });
+  }
+
+  // ===== 用户偏好接口(下播提醒等) =====
+  // GET /api/preferences
+  if (method === 'GET' && parts[1] === 'preferences' && parts.length === 2) {
+    const prefs = store.getPreferences(userId);
+    return sendJson(res, 200, { success: true, preferences: prefs });
+  }
+  // POST /api/preferences
+  if (method === 'POST' && parts[1] === 'preferences' && parts.length === 2) {
+    return readBody(req).then(function (body) {
+      const prefs = {};
+      if (typeof body.endedAlert === 'boolean') prefs.endedAlert = body.endedAlert;
+      store.setPreferences(userId, prefs);
+      return sendJson(res, 200, { success: true, preferences: store.getPreferences(userId) });
     });
   }
 
