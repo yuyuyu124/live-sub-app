@@ -15,6 +15,7 @@ const crypto = require('crypto');
 
 const store = require('./lib/store');
 const push = require('./lib/push');
+const weibo = require('./lib/weibo');
 
 // ---- 配置 ----
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -23,8 +24,11 @@ const STAGGER_MS = 2000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
+const WEIBO_POLL_INTERVAL = parseInt(process.env.WEIBO_POLL_MS || '90000', 10);
 let liveTimer = null;
 let liveFirstCheck = true;
+let weiboTimer = null;
+let weiboFirstCheck = true;
 let sseClients = [];   // [{ res, userId }]
 
 // ============================================================
@@ -333,6 +337,70 @@ async function checkAllLive() {
 }
 
 // ============================================================
+// 检查所有微博订阅(按 uid 去重 → 拉取 → 找新微博 → 按订阅者各自推送)
+// ============================================================
+let weiboChecking = false;
+async function checkAllWeibo() {
+  if (weiboChecking) return;
+  weiboChecking = true;
+  try {
+    const groups = store.getAllWeiboSubsGroupedByUid();
+    if (groups.length === 0) return;
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i];
+      let posts = [];
+      try { posts = await weibo.fetchWeiboPosts(g.uid); }
+      catch (e) {
+        if (i < groups.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
+        continue;
+      }
+      if (!posts || posts.length === 0) {
+        if (i < groups.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
+        continue;
+      }
+      const newestMid = posts[0].mid;
+      for (const owner of g.owners) {
+        const userId = owner.userId;
+        const sub = owner.sub;
+        const prevLastMid = sub.lastMid || '';
+        if (!prevLastMid) {
+          // 首次:只记录最新 mid,不推送(避免启动时推一堆历史)
+          store.updateWeiboSub(userId, sub.id, { lastMid: newestMid, uname: posts[0].author || sub.uname || '' });
+          continue;
+        }
+        // 找出新微博:posts 是从新到旧,找到 prevLastMid 位置,它前面的都是新的
+        let newPosts = [];
+        for (const p of posts) {
+          if (p.mid === prevLastMid) break;
+          newPosts.push(p);
+        }
+        // newPosts 从新到旧,推送时从旧到新(按时间顺序)
+        newPosts.reverse();
+        // 每条单独推一次
+        for (const p of newPosts) {
+          broadcastToUser(userId, 'weibo-new', {
+            id: sub.id, uid: g.uid, mid: p.mid, title: p.title, link: p.link,
+            author: p.author || sub.uname, description: p.description
+          });
+          const cfg = store.getPushConfig(userId);
+          if (cfg.pushType && cfg.pushKey) {
+            const title = '📢 微博更新 · ' + (p.author || sub.uname || g.uid);
+            const desp = '【' + (p.author || sub.uname || g.uid) + '】' + (p.title || '') + '\n🔗 ' + p.link;
+            push.pushAlert(cfg.pushType, cfg.pushKey, title, desp);
+          }
+        }
+        store.updateWeiboSub(userId, sub.id, { lastMid: newestMid, uname: posts[0].author || sub.uname || '' });
+      }
+      if (i < groups.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
+    }
+    weiboFirstCheck = false;
+    broadcastAll('weibo-subs-updated', {});
+  } finally {
+    weiboChecking = false;
+  }
+}
+
+// ============================================================
 // SSE:按 userId 分发
 // ============================================================
 function broadcastToUser(userId, event, data) {
@@ -557,6 +625,50 @@ function handleApi(req, res, pathname) {
     });
   }
 
+  // ===== 微博订阅接口 =====
+  // GET /api/weibo-subs
+  if (method === 'GET' && parts[1] === 'weibo-subs' && parts.length === 2) {
+    const wsubs = store.getWeiboSubs(userId);
+    return sendJson(res, 200, { success: true, subs: wsubs.map(function (s) {
+      return { id: s.id, uid: s.uid, uname: s.uname || '', lastMid: s.lastMid || '', lastTitle: s.lastTitle || '' };
+    }) });
+  }
+  // POST /api/weibo-subs { input }
+  if (method === 'POST' && parts[1] === 'weibo-subs' && parts.length === 2) {
+    return readBody(req).then(async function (body) {
+      const parsed = weibo.parseWeiboInput(body.input || '');
+      if (!parsed) return sendJson(res, 200, { success: false, error: '无法识别微博链接,请输入微博主页链接或纯数字 UID' });
+      const wsubs = store.getWeiboSubs(userId);
+      const existing = wsubs.find(function (s) { return String(s.uid) === String(parsed.uid); });
+      if (existing) return sendJson(res, 200, { success: false, error: '该博主已订阅过了' });
+      const sub = { id: Date.now().toString() + Math.floor(Math.random() * 1000), uid: parsed.uid, uname: '', lastMid: '', lastTitle: '' };
+      // 拉一次拿博主名 + 初始化 lastMid
+      try {
+        const posts = await weibo.fetchWeiboPosts(parsed.uid);
+        if (posts && posts.length > 0) {
+          sub.uname = posts[0].author || '';
+          sub.lastMid = posts[0].mid;
+          sub.lastTitle = posts[0].title || '';
+        }
+      } catch (e) {}
+      store.addWeiboSub(userId, sub);
+      if (store.getWeiboSubs(userId).length === 1 && !weiboTimer) startWeiboChecker();
+      broadcastToUser(userId, 'weibo-subs-updated', {});
+      return sendJson(res, 200, { success: true, sub: sub });
+    });
+  }
+  // DELETE /api/weibo-subs/:id
+  if (method === 'DELETE' && parts[1] === 'weibo-subs' && parts.length === 3) {
+    store.removeWeiboSub(userId, parts[2]);
+    broadcastToUser(userId, 'weibo-subs-updated', {});
+    return sendJson(res, 200, { success: true });
+  }
+  // POST /api/weibo-check
+  if (method === 'POST' && parts[1] === 'weibo-check' && parts.length === 2) {
+    checkAllWeibo();
+    return sendJson(res, 200, { success: true });
+  }
+
   return sendJson(res, 404, { success: false, error: 'not found' });
 }
 
@@ -604,15 +716,29 @@ function startLiveChecker() {
 }
 function stopLiveChecker() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
 
+function startWeiboChecker() {
+  if (weiboTimer) return;
+  const groups = store.getAllWeiboSubsGroupedByUid();
+  if (groups.length > 0) setTimeout(checkAllWeibo, 5000);
+  weiboTimer = setInterval(function () {
+    const g2 = store.getAllWeiboSubsGroupedByUid();
+    if (g2.length > 0) checkAllWeibo();
+  }, WEIBO_POLL_INTERVAL);
+}
+function stopWeiboChecker() { if (weiboTimer) { clearInterval(weiboTimer); weiboTimer = null; } }
+
 store.load();
 const server = http.createServer(handleRequest);
 server.listen(PORT, '0.0.0.0', function () {
   console.log('📡 直播订阅服务(多用户版)已启动');
   console.log('   端口: ' + PORT);
   const rooms = store.getAllSubsGroupedByRoom();
-  console.log('   当前订阅房间数(去重): ' + rooms.length);
+  console.log('   直播订阅房间数(去重): ' + rooms.length);
+  const wgroups = store.getAllWeiboSubsGroupedByUid();
+  console.log('   微博订阅博主数(去重): ' + wgroups.length);
   startLiveChecker();
+  startWeiboChecker();
 });
 
-process.on('SIGINT', function () { stopLiveChecker(); process.exit(0); });
-process.on('SIGTERM', function () { stopLiveChecker(); process.exit(0); });
+process.on('SIGINT', function () { stopLiveChecker(); stopWeiboChecker(); process.exit(0); });
+process.on('SIGTERM', function () { stopLiveChecker(); stopWeiboChecker(); process.exit(0); });

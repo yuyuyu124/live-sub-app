@@ -232,6 +232,23 @@ header .sub{font-size:11px;opacity:.85;margin-top:2px}
     </div>
   </div>
 
+  <!-- 微博动态 -->
+  <div class="card">
+    <div class="card-title"><span class="ic">📢</span>微博动态</div>
+    <div class="add-row">
+      <input type="text" class="text-input" id="weiboInput" placeholder="粘贴微博主页链接或输入 UID">
+      <button class="btn-primary" id="weiboAddBtn">添加</button>
+    </div>
+    <div class="add-hint">支持:weibo.com/u/UID、m.weibo.cn/u/UID、纯数字 UID(需服务器配置 RSSHub)</div>
+    <div class="list-head" style="margin-top:10px">
+      <span>微博订阅</span>
+      <button class="btn-text" id="weiboCheckBtn">立即检查</button>
+    </div>
+    <div class="live-list" id="weiboList" style="max-height:40vh">
+      <div class="live-empty">还没有订阅微博博主~<br>在上方粘贴微博主页链接来添加</div>
+    </div>
+  </div>
+
   <!-- 提醒设置 -->
   <div class="card">
     <div class="card-title"><span class="ic">⚙️</span>提醒设置</div>
@@ -728,9 +745,82 @@ function connectSSE(){
     }catch(err){}
   });
   es.addEventListener('live-subs-updated', function(){ syncSubs(); });
-  es.onopen = function(){ syncSubs(); };
+  es.addEventListener('weibo-subs-updated', function(){ syncWeiboSubs(); });
+  es.addEventListener('weibo-new', function(e){
+    try{
+      var d = JSON.parse(e.data);
+      showToast('📢 ' + (d.author || '微博') + ' 更新:' + (d.title || '').substring(0,30));
+      playAlertSound();
+    }catch(err){}
+  });
+  es.onopen = function(){ syncSubs(); syncWeiboSubs(); };
   es.onerror = function(){};
 }
+
+/* ---- 微博动态 ---- */
+var weiboSubs = [];
+function loadWeiboSubs(){
+  fetch(API + '/api/weibo-subs', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d.success){ weiboSubs = d.subs || []; renderWeiboList(); } })
+    .catch(function(){});
+}
+function syncWeiboSubs(){ loadWeiboSubs(); }
+function renderWeiboList(){
+  var list = document.getElementById('weiboList');
+  if(!weiboSubs || weiboSubs.length === 0){
+    list.innerHTML = '<div class="live-empty">还没有订阅微博博主~<br>在上方粘贴微博主页链接来添加</div>';
+    return;
+  }
+  var html = '';
+  for(var i = 0; i < weiboSubs.length; i++){
+    var s = weiboSubs[i];
+    var name = s.uname || ('UID ' + s.uid);
+    var icon = name.substring(0,1);
+    var titleHtml = s.lastTitle ? '<div class="live-title">最新:' + escHtml(s.lastTitle.substring(0,40)) + '</div>' : '<div class="live-title">等待抓取动态...</div>';
+    html += '<div class="live-item" data-wid="' + escHtml(s.id) + '">'
+      + '<div class="avatar-wrap"><div class="avatar-ph">' + escHtml(icon) + '</div></div>'
+      + '<div class="live-info"><div class="live-name">' + escHtml(name) + '</div>' + titleHtml + '</div>'
+      + '<div class="live-act"><button class="icon-btn del" data-wid="' + escHtml(s.id) + '" title="删除">✕</button></div>'
+      + '</div>';
+  }
+  list.innerHTML = html;
+}
+function doWeiboAdd(input, btn){
+  if(!input) return;
+  btn.disabled = true; btn.textContent = '添加中...';
+  fetch(API + '/api/weibo-subs', {
+    method: 'POST', headers: apiHeaders(), body: JSON.stringify({ input: input })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if(d.success){ showToast('订阅成功~'); syncWeiboSubs(); }
+    else showToast(d.error || '添加失败');
+  }).catch(function(){ showToast('网络错误或 RSSHub 未配置'); })
+  .finally(function(){ btn.disabled = false; btn.textContent = '添加'; });
+}
+document.getElementById('weiboAddBtn').addEventListener('click', function(){
+  var v = document.getElementById('weiboInput').value.trim();
+  if(!v) return;
+  doWeiboAdd(v, this);
+  document.getElementById('weiboInput').value = '';
+});
+document.getElementById('weiboInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') document.getElementById('weiboAddBtn').click(); });
+document.getElementById('weiboCheckBtn').addEventListener('click', function(){
+  var btn = this; btn.disabled = true; btn.textContent = '检查中...';
+  fetch(API + '/api/weibo-check', { method: 'POST', headers: apiHeaders() }).then(function(r){ return r.json(); }).then(function(){
+    showToast('检查完成~');
+  }).catch(function(){ showToast('检查失败'); })
+  .finally(function(){ btn.disabled = false; btn.textContent = '立即检查'; });
+});
+document.getElementById('weiboList').addEventListener('click', function(e){
+  var del = e.target.closest('.icon-btn.del');
+  if(del && del.getAttribute('data-wid')){
+    var id = del.getAttribute('data-wid');
+    if(!confirm('确定取消订阅该微博博主吗？')) return;
+    fetch(API + '/api/weibo-subs/' + id, { method: 'DELETE', headers: apiHeaders() }).then(function(r){ return r.json(); }).then(function(){
+      showToast('已取消订阅'); syncWeiboSubs();
+    }).catch(function(){ showToast('删除失败'); });
+  }
+});
 
 /* ---- 初始化 ---- */
 (function initUserBox(){
@@ -742,9 +832,11 @@ function connectSSE(){
 loadSettings();
 loadLocal();
 syncSubs();
+syncWeiboSubs();
 loadPushStatus();
 connectSSE();
 setInterval(function(){ syncSubs(); }, 120000);
+setInterval(function(){ syncWeiboSubs(); }, 120000);
 </script>
 </body>
 </html>
