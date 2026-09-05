@@ -138,7 +138,6 @@
               <th>状态</th>
               <th>剩余天数</th>
               <th>直播订阅</th>
-              <th>微博订阅</th>
               <th>推送方式</th>
               <th>过期时间</th>
             </tr>
@@ -327,7 +326,7 @@ function filterUsers(){
 function renderUsers(list){
   var tbody = document.getElementById('usersTbody');
   if(list.length === 0){
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#666;padding:32px;">暂无用户</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#666;padding:32px;">暂无用户</td></tr>';
     return;
   }
   tbody.innerHTML = list.map(function(u){
@@ -338,9 +337,8 @@ function renderUsers(list){
       '<td>' + statusBadge + '</td>' +
       '<td>' + u.daysLeft + '天</td>' +
       '<td>' + u.liveSubs + '/' + u.maxLiveSubs + '</td>' +
-      '<td>' + u.weiboSubs + '</td>' +
-      '<td>' + (u.pushType || '-') + '</td>' +
-      '<td class="muted">' + (u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : '-') + '</td>' +
+          '<td>' + (u.pushType || '-') + '</td>' +
+          '<td class="muted">' + (u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : '-') + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -373,16 +371,6 @@ function showUserDetail(userId){
           html += '<td style="padding:6px;">' + (s.uname || '-') + (s.title ? '<br><span style="color:#999;font-size:12px;">' + s.title + '</span>' : '') + '</td>';
           html += '<td style="padding:6px;">' + liveBadge + '</td>';
           html += '</tr>';
-        });
-        html += '</tbody></table>';
-      }
-
-      if(u.weiboSubs && u.weiboSubs.length > 0){
-        html += '<h4 style="margin:16px 0 6px;">微博订阅 (' + u.weiboSubs.length + ')</h4>';
-        html += '<table style="width:100%;font-size:13px;border-collapse:collapse;">';
-        html += '<thead><tr style="background:#f5f5f5;"><th style="text-align:left;padding:6px;">UID</th><th style="text-align:left;padding:6px;">名称</th></tr></thead><tbody>';
-        u.weiboSubs.forEach(function(w){
-          html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:6px;">' + w.uid + '</td><td style="padding:6px;">' + (w.name || '-') + '</td></tr>';
         });
         html += '</tbody></table>';
       }
