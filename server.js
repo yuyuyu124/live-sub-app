@@ -108,6 +108,8 @@ function parseLiveInput(input) {
   if (/^\d{1,10}$/.test(input)) return { platform: 'bilibili', roomId: input };
   m = input.match(/live\.douyin\.com\/(\d+)/);
   if (m) return { platform: 'douyin', roomId: m[1] };
+  m = input.match(/douyin\.com\/(?:follow\/)?live\/(\d+)/);
+  if (m) return { platform: 'douyin', roomId: m[1] };
   if (/v\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
   if (/live\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
   if (/douyin\.com\/user\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
@@ -137,40 +139,49 @@ function parseDouyinRoom(html) {
   if (!html || html.length < 1000) return null;
 
   // === 新版(2024+):数据在 __pace_f 的 RSC 数据中 ===
-  // 格式: roomStore":{"roomInfo":{...},"liveStatus":"normal"|"live"
-  const paceChunks = [];
-  let paceRe = /__pace_f\.push\(\[1,"(.*?)"\]\)/g;
-  let pm;
-  while ((pm = paceRe.exec(html)) !== null) {
-    paceChunks.push(pm[1].replace(/\\"/g, '"').replace(/\\\//g, '/').replace(/\\n/g, '').replace(/\\\\u002F/g, '/'));
-  }
-  const paceFull = paceChunks.join('');
-
-  // 找 roomStore 下的 roomInfo 和 liveStatus
-  let rsIdx = -1;
-  let rsStart = 0;
+  // 每个 push 在单独的 <script> 里,用 </script> 定位边界
+  var paceFull = '';
+  var searchStr = '__pace_f.push([1,';
+  var pos = 0;
   while (true) {
-    rsIdx = paceFull.indexOf('roomStore', rsStart);
+    var paceIdx = html.indexOf(searchStr, pos);
+    if (paceIdx < 0) break;
+    var scriptEnd = html.indexOf('</script>', paceIdx);
+    if (scriptEnd < 0) break;
+    var chunk = html.substring(paceIdx, scriptEnd);
+    var q1 = chunk.indexOf('"');
+    var q2 = chunk.lastIndexOf('"]');
+    if (q1 >= 0 && q2 > q1) {
+      var content = chunk.substring(q1 + 1, q2);
+      content = content.split('\\"').join('"').split('\\/').join('/').split('\\n').join('');
+      paceFull += content;
+    }
+    pos = scriptEnd + 9;
+  }
+
+  // 找 roomStore 下有实际数据的(含 nickname 或 web_rid)
+  var rsStart = 0;
+  while (true) {
+    var rsIdx = paceFull.indexOf('roomStore', rsStart);
     if (rsIdx < 0) break;
     rsStart = rsIdx + 10;
-    const seg = paceFull.substring(rsIdx, rsIdx + 8000);
-    const liveStatusM = seg.match(/"liveStatus"\s*:\s*"([^"]+)"/);
-    const nickM = seg.match(/"nickname"\s*:\s*"([^"]{0,60})"/);
-    const avatarM = seg.match(/"avatar_thumb"\s*:\s*\{[^}]*?"url_list"\s*:\s*\["([^"]+)"/);
-    const webRidM = seg.match(/"web_rid"\s*:\s*"(\d+)"/);
-    const titleM = seg.match(/"title"\s*:\s*"([^"]{0,100})"/);
-    const streamUrlM = seg.match(/"web_stream_url"\s*:\s*(?!null)/);
-    // liveStatus: "normal" = 未开播, "live" = 开播中, "prepare" = 准备中
-    // 跳过没有实际数据的 roomStore(空 roomInfo),找有 nickname 或 web_rid 的
-    if ((liveStatusM || nickM) && (nickM || webRidM)) {
-      const isLive = liveStatusM && (liveStatusM[1] === 'live' || liveStatusM[1] === 'streaming');
-      const hasStream = !!streamUrlM;
+    var seg = paceFull.substring(rsIdx, rsIdx + 8000);
+    var lsMatch = seg.match(/"liveStatus"\s*:\s*"([^"]+)"/);
+    var nickMatch = seg.match(/"nickname"\s*:\s*"([^"]{0,60})"/);
+    var ridMatch = seg.match(/"web_rid"\s*:\s*"(\d+)"/);
+    var avatarMatch = seg.match(/"avatar_thumb"\s*:\s*\{[^}]*?"url_list"\s*:\s*\["([^"]+)"/);
+    var titleMatch = seg.match(/"title"\s*:\s*"([^"]{0,100})"/);
+    if ((lsMatch || nickMatch) && (nickMatch || ridMatch)) {
+      // 在整个 paceFull 中搜索 flv_pull_url(不限 8000 字符范围)
+      var streamUrlMatch = paceFull.indexOf('flv_pull_url') >= 0;
+      var isLive = lsMatch && (lsMatch[1] === 'live' || lsMatch[1] === 'streaming');
+      var hasStream = !!streamUrlMatch;
       return {
         status: (isLive || hasStream) ? 2 : 0,
-        title: titleM ? titleM[1] : '',
-        nickname: nickM ? nickM[1] : '',
-        avatar: avatarM ? avatarM[1].replace(/\\u002F/g, '/') : '',
-        web_rid: webRidM ? webRidM[1] : ''
+        title: titleMatch ? titleMatch[1] : '',
+        nickname: nickMatch ? nickMatch[1] : '',
+        avatar: avatarMatch ? avatarMatch[1].replace(/\\u002F/g, '/') : '',
+        web_rid: ridMatch ? ridMatch[1] : ''
       };
     }
   }
