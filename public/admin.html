@@ -126,6 +126,9 @@
 
     <div id="usersTab" style="display:none;">
       <h2>用户列表</h2>
+      <div style="margin-bottom:12px;">
+        <input id="userSearch" type="text" placeholder="输入用户 ID 搜索..." oninput="filterUsers()" style="width:280px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -144,6 +147,17 @@
         </table>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- 用户详情弹窗 -->
+<div id="userDetailModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:85vh;overflow-y:auto;padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">用户订阅详情</h3>
+      <button onclick="closeUserDetail()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;">&times;</button>
+    </div>
+    <div id="userDetailBody"></div>
   </div>
 </div>
 
@@ -282,30 +296,92 @@ function deleteCard(code){
   .then(function(data){ if(data.success) loadCards(); });
 }
 
+var allUsers = [];
 function loadUsers(){
   fetch(API + '/api/admin/users', { headers: apiHeaders() })
     .then(function(r){ return r.json(); })
     .then(function(data){
       if(!data.success) return;
-      var tbody = document.getElementById('usersTbody');
-      if(data.users.length === 0){
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#666;padding:32px;">暂无用户</td></tr>';
-        return;
-      }
-      tbody.innerHTML = data.users.map(function(u){
-        var statusBadge = u.active ? '<span class="badge badge-used">正常</span>' : '<span class="badge badge-expired">未激活/过期</span>';
-        return '<tr>' +
-          '<td class="muted">' + u.userId.substring(0, 12) + '...</td>' +
-          '<td class="code">' + (u.cardCode || '-') + '</td>' +
-          '<td>' + statusBadge + '</td>' +
-          '<td>' + u.daysLeft + '天</td>' +
-          '<td>' + u.liveSubs + '/' + u.maxLiveSubs + '</td>' +
-          '<td>' + u.weiboSubs + '</td>' +
-          '<td>' + (u.pushType || '-') + '</td>' +
-          '<td class="muted">' + (u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : '-') + '</td>' +
-        '</tr>';
-      }).join('');
+      allUsers = data.users;
+      renderUsers(allUsers);
     });
+}
+function filterUsers(){
+  var kw = (document.getElementById('userSearch').value || '').trim().toLowerCase();
+  if(!kw){ renderUsers(allUsers); return; }
+  renderUsers(allUsers.filter(function(u){ return u.userId.toLowerCase().indexOf(kw) >= 0; }));
+}
+function renderUsers(list){
+  var tbody = document.getElementById('usersTbody');
+  if(list.length === 0){
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#666;padding:32px;">暂无用户</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(function(u){
+    var statusBadge = u.active ? '<span class="badge badge-used">正常</span>' : '<span class="badge badge-expired">未激活/过期</span>';
+    return '<tr style="cursor:pointer;" onclick="showUserDetail(\'' + u.userId + '\')">' +
+      '<td class="muted">' + u.userId.substring(0, 12) + '...</td>' +
+      '<td class="code">' + (u.cardCode || '-') + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td>' + u.daysLeft + '天</td>' +
+      '<td>' + u.liveSubs + '/' + u.maxLiveSubs + '</td>' +
+      '<td>' + u.weiboSubs + '</td>' +
+      '<td>' + (u.pushType || '-') + '</td>' +
+      '<td class="muted">' + (u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : '-') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function showUserDetail(userId){
+  fetch(API + '/api/admin/users/' + userId, { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data.success){ alert(data.error || '获取失败'); return; }
+      var u = data.user;
+      var html = '';
+      html += '<div style="margin-bottom:12px;line-height:1.8;">';
+      html += '<div><b>用户 ID:</b> <span class="muted">' + u.userId + '</span></div>';
+      html += '<div><b>卡密:</b> ' + (u.cardCode || '-') + '</div>';
+      html += '<div><b>状态:</b> ' + (u.active ? '正常' : '未激活/过期') + ' &nbsp; <b>剩余:</b> ' + u.daysLeft + '天 &nbsp; <b>过期:</b> ' + (u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : '-') + '</div>';
+      html += '<div><b>推送方式:</b> ' + (u.pushType || '-') + '</div>';
+      html += '</div>';
+
+      html += '<h4 style="margin:12px 0 6px;">直播订阅 (' + u.subs.length + '/' + u.maxLiveSubs + ')</h4>';
+      if(u.subs.length === 0){
+        html += '<div style="color:#999;padding:8px 0;">暂无订阅</div>';
+      } else {
+        html += '<table style="width:100%;font-size:13px;border-collapse:collapse;">';
+        html += '<thead><tr style="background:#f5f5f5;"><th style="text-align:left;padding:6px;">平台</th><th style="text-align:left;padding:6px;">房间号</th><th style="text-align:left;padding:6px;">主播</th><th style="text-align:left;padding:6px;">状态</th></tr></thead><tbody>';
+        u.subs.forEach(function(s){
+          var liveBadge = s.liveStatus === 2 ? '<span style="color:#e74c3c;">直播中</span>' : '<span style="color:#999;">未开播</span>';
+          html += '<tr style="border-bottom:1px solid #eee;">';
+          html += '<td style="padding:6px;">' + (s.platform === 'bilibili' ? 'B站' : '抖音') + '</td>';
+          html += '<td style="padding:6px;">' + s.roomId + '</td>';
+          html += '<td style="padding:6px;">' + (s.uname || '-') + (s.title ? '<br><span style="color:#999;font-size:12px;">' + s.title + '</span>' : '') + '</td>';
+          html += '<td style="padding:6px;">' + liveBadge + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      if(u.weiboSubs && u.weiboSubs.length > 0){
+        html += '<h4 style="margin:16px 0 6px;">微博订阅 (' + u.weiboSubs.length + ')</h4>';
+        html += '<table style="width:100%;font-size:13px;border-collapse:collapse;">';
+        html += '<thead><tr style="background:#f5f5f5;"><th style="text-align:left;padding:6px;">UID</th><th style="text-align:left;padding:6px;">名称</th></tr></thead><tbody>';
+        u.weiboSubs.forEach(function(w){
+          html += '<tr style="border-bottom:1px solid #eee;"><td style="padding:6px;">' + w.uid + '</td><td style="padding:6px;">' + (w.name || '-') + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      document.getElementById('userDetailBody').innerHTML = html;
+      var modal = document.getElementById('userDetailModal');
+      modal.style.display = 'flex';
+    });
+}
+
+function closeUserDetail(){
+  document.getElementById('userDetailModal').style.display = 'none';
 }
 
 // 自动登录

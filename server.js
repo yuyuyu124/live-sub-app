@@ -596,6 +596,34 @@ function handleApi(req, res, pathname) {
     return sendJson(res, 200, { success: true, users: userList });
   }
 
+  // GET /api/admin/users/:userId - 单个用户详情(含完整订阅列表)
+  if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'users' && parts.length === 4) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    const targetUid = parts[3];
+    const u = store.getUser(targetUid);
+    if (!u) return sendJson(res, 404, { success: false, error: '用户不存在' });
+    const auth = cards.getUserAuth(targetUid);
+    return sendJson(res, 200, {
+      success: true,
+      user: {
+        userId: targetUid,
+        cardCode: auth.cardCode,
+        active: auth.active,
+        expiresAt: auth.expiresAt,
+        daysLeft: auth.daysLeft,
+        maxLiveSubs: auth.maxLiveSubs,
+        pushType: u.pushType || '',
+        pushKey: u.pushKey || '',
+        subs: (u.subs || []).map(function (s) {
+          return { id: s.id, platform: s.platform, roomId: s.roomId, uname: s.uname || '', avatar: s.avatar || '', liveStatus: s.liveStatus, title: s.title || '', remark: s.remark || '' };
+        }),
+        weiboSubs: (u.weiboSubs || []).map(function (s) {
+          return { id: s.id, uid: s.uid || '', name: s.name || '', remark: s.remark || '' };
+        })
+      }
+    });
+  }
+
   // GET /api/whoami  - 返回/生成 userId(前端首次访问用来拿 UUID)
   if (method === 'GET' && parts[1] === 'whoami' && parts.length === 2) {
     let uid = userId;
