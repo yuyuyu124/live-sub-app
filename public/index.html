@@ -667,8 +667,8 @@ function updateHint(){
     document.getElementById('quickInput').placeholder = '输入B站房间号';
     hint.textContent = 'B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345';
   } else {
-    document.getElementById('quickInput').placeholder = '输入抖音UID或分享链接';
-    hint.textContent = '可输入：①抖音UID数字 ②分享链接 v.douyin.com/xxx ③用户主页链接';
+    document.getElementById('quickInput').placeholder = '输入抖音直播间链接';
+    hint.textContent = '仅支持通过网页版抖音获取直播间链接';
   }
 }
 platformSel.addEventListener('change', updateHint);
