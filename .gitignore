@@ -1,0 +1,14 @@
+# 运行时数据（敏感，勿提交）
+users_data.json
+cards_data.json
+live_subs.json
+
+# 依赖
+node_modules/
+
+# 环境变量
+.env
+.env.*
+
+# 日志
+*.log

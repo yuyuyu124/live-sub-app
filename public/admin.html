@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台 - 直播订阅</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f1e; color: #e0e0e0; min-height: 100vh; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 22px; margin-bottom: 24px; color: #fff; }
+  h2 { font-size: 16px; margin: 32px 0 16px; color: #aaa; border-bottom: 1px solid #2a2a3e; padding-bottom: 8px; }
+  
+  /* 登录 */
+  .login-box { max-width: 360px; margin: 80px auto; background: #1a1a2e; padding: 32px; border-radius: 12px; }
+  .login-box h1 { text-align: center; margin-bottom: 24px; }
+  input, button { font-family: inherit; }
+  .login-box input { width: 100%; padding: 12px 16px; font-size: 14px; border: 1px solid #333; border-radius: 8px; background: #0f0f1e; color: #fff; margin-bottom: 16px; }
+  .btn { padding: 12px 20px; font-size: 14px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
+  .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; width: 100%; }
+  .btn-danger { background: #e74c3c; color: #fff; padding: 6px 12px; font-size: 12px; }
+  .btn-warn { background: #f39c12; color: #fff; padding: 6px 12px; font-size: 12px; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  
+  /* 生成卡密表单 */
+  .gen-form { background: #1a1a2e; padding: 20px; border-radius: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; align-items: end; }
+  .gen-form label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+  .gen-form input { width: 100%; padding: 10px 12px; border: 1px solid #333; border-radius: 6px; background: #0f0f1e; color: #fff; font-size: 14px; }
+  
+  /* 表格 */
+  .table-wrap { overflow-x: auto; background: #1a1a2e; border-radius: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 12px; background: #22223a; color: #888; font-weight: 600; white-space: nowrap; }
+  td { padding: 12px; border-top: 1px solid #2a2a3e; }
+  tr:hover td { background: #1e1e35; }
+  .code { font-family: 'Courier New', monospace; color: #667eea; font-weight: 600; }
+  .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge-unused { background: #27ae60; color: #fff; }
+  .badge-used { background: #3498db; color: #fff; }
+  .badge-disabled { background: #95a5a6; color: #fff; }
+  .badge-expired { background: #e74c3c; color: #fff; }
+  .muted { color: #666; font-size: 12px; }
+  
+  .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+  .tab { padding: 8px 16px; background: #1a1a2e; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .tab.active { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+  
+  .msg { padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+  .msg-error { background: #3a1a1a; color: #ff6b6b; }
+  .msg-success { background: #1a3a1a; color: #51cf66; }
+  
+  .header-row { display: flex; justify-content: space-between; align-items: center; }
+  .logout { color: #888; font-size: 13px; cursor: pointer; }
+  .logout:hover { color: #fff; }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- 登录页 -->
+  <div id="loginView">
+    <div class="login-box">
+      <h1>🔐 管理后台</h1>
+      <input id="tokenInput" type="password" placeholder="请输入管理员 Token" />
+      <button class="btn btn-primary" onclick="doLogin()">登录</button>
+      <div id="loginMsg" style="margin-top:12px;font-size:13px;"></div>
+    </div>
+  </div>
+
+  <!-- 管理页 -->
+  <div id="adminView" style="display:none;">
+    <div class="header-row">
+      <h1>📊 管理后台</h1>
+      <span class="logout" onclick="logout()">退出</span>
+    </div>
+    
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('cards')">卡密管理</div>
+      <div class="tab" onclick="switchTab('users')">用户列表</div>
+    </div>
+
+    <div id="cardsTab">
+      <h2>生成卡密</h2>
+      <div class="gen-form">
+        <div>
+          <label>数量</label>
+          <input id="genCount" type="number" value="1" min="1" max="100" />
+        </div>
+        <div>
+          <label>有效期(天)</label>
+          <input id="genDays" type="number" value="30" min="1" />
+        </div>
+        <div>
+          <label>最大直播订阅数</label>
+          <input id="genMax" type="number" value="10" min="1" />
+        </div>
+        <div>
+          <label>备注(可选)</label>
+          <input id="genRemark" type="text" placeholder="如：月度卡" />
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="generateCards()">生成卡密</button>
+        </div>
+      </div>
+      <div id="genMsg"></div>
+
+      <h2>卡密列表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>卡密</th>
+              <th>状态</th>
+              <th>天数</th>
+              <th>最大订阅</th>
+              <th>绑定用户</th>
+              <th>激活时间</th>
+              <th>过期时间</th>
+              <th>备注</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="cardsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="usersTab" style="display:none;">
+      <h2>用户列表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>用户 ID</th>
+              <th>卡密</th>
+              <th>状态</th>
+              <th>剩余天数</th>
+              <th>直播订阅</th>
+              <th>微博订阅</th>
+              <th>推送方式</th>
+              <th>过期时间</th>
+            </tr>
+          </thead>
+          <tbody id="usersTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var API = '';
+var adminToken = localStorage.getItem('adminToken') || '';
+
+function apiHeaders(extra){
+  return Object.assign({ 'Content-Type': 'application/json', 'X-Admin-Token': adminToken }, extra || {});
+}
+
+function doLogin(){
+  var token = document.getElementById('tokenInput').value.trim();
+  if(!token){ document.getElementById('loginMsg').innerHTML = '<div class="msg msg-error">请输入 Token</div>'; return; }
+  adminToken = token;
+  // 用卡密列表接口验证
+  fetch(API + '/api/admin/cards', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success){
+        localStorage.setItem('adminToken', adminToken);
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('adminView').style.display = 'block';
+        loadCards();
+      } else {
+        document.getElementById('loginMsg').innerHTML = '<div class="msg msg-error">Token 无效</div>';
+      }
+    })
+    .catch(function(){
+      document.getElementById('loginMsg').innerHTML = '<div class="msg msg-error">网络错误</div>';
+    });
+}
+
+function logout(){
+  localStorage.removeItem('adminToken');
+  adminToken = '';
+  document.getElementById('adminView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'block';
+}
+
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  event.target.classList.add('active');
+  document.getElementById('cardsTab').style.display = tab === 'cards' ? 'block' : 'none';
+  document.getElementById('usersTab').style.display = tab === 'users' ? 'block' : 'none';
+  if(tab === 'users') loadUsers();
+}
+
+function generateCards(){
+  var count = parseInt(document.getElementById('genCount').value, 10) || 1;
+  var days = parseInt(document.getElementById('genDays').value, 10) || 30;
+  var max = parseInt(document.getElementById('genMax').value, 10) || 10;
+  var remark = document.getElementById('genRemark').value.trim();
+  
+  fetch(API + '/api/admin/cards', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ count: count, days: days, maxLiveSubs: max, remark: remark })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.success){
+      var html = '<div class="msg msg-success">✅ 成功生成 ' + data.cards.length + ' 张卡密：</div>';
+      html += '<div style="background:#0f0f1e;padding:12px;border-radius:8px;font-family:monospace;font-size:13px;line-height:2;">';
+      data.cards.forEach(function(c){
+        html += '<div><span class="code">' + c.code + '</span> <span class="muted">(' + c.days + '天, 最多' + c.maxLiveSubs + '订阅)</span></div>';
+      });
+      html += '</div>';
+      document.getElementById('genMsg').innerHTML = html;
+      loadCards();
+    } else {
+      document.getElementById('genMsg').innerHTML = '<div class="msg msg-error">' + (data.error || '生成失败') + '</div>';
+    }
+  })
+  .catch(function(){
+    document.getElementById('genMsg').innerHTML = '<div class="msg msg-error">网络错误</div>';
+  });
+}
+
+function loadCards(){
+  fetch(API + '/api/admin/cards', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data.success) return;
+      var tbody = document.getElementById('cardsTbody');
+      if(data.cards.length === 0){
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#666;padding:32px;">暂无卡密</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.cards.map(function(c){
+        var statusBadge = '';
+        if(c.status === 'unused') statusBadge = '<span class="badge badge-unused">未使用</span>';
+        else if(c.status === 'used'){
+          var exp = new Date(c.expiresAt).getTime();
+          statusBadge = exp > Date.now() ? '<span class="badge badge-used">已激活</span>' : '<span class="badge badge-expired">已过期</span>';
+        }
+        else if(c.status === 'disabled') statusBadge = '<span class="badge badge-disabled">已停用</span>';
+        
+        var actions = '';
+        if(c.status === 'used'){
+          actions = '<button class="btn btn-warn btn-sm" onclick="disableCard(\'' + c.code + '\')">停用</button>';
+        } else if(c.status === 'unused'){
+          actions = '<button class="btn btn-danger btn-sm" onclick="deleteCard(\'' + c.code + '\')">删除</button>';
+        }
+        
+        return '<tr>' +
+          '<td class="code">' + c.code + '</td>' +
+          '<td>' + statusBadge + '</td>' +
+          '<td>' + c.days + '天</td>' +
+          '<td>' + c.maxLiveSubs + '</td>' +
+          '<td class="muted">' + (c.boundUserId ? c.boundUserId.substring(0,8) + '...' : '-') + '</td>' +
+          '<td class="muted">' + (c.activatedAt ? new Date(c.activatedAt).toLocaleDateString() : '-') + '</td>' +
+          '<td class="muted">' + (c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : '-') + '</td>' +
+          '<td class="muted">' + (c.remark || '-') + '</td>' +
+          '<td>' + actions + '</td>' +
+        '</tr>';
+      }).join('');
+    });
+}
+
+function disableCard(code){
+  if(!confirm('确定停用此卡密？停用后该用户将无法继续使用。')) return;
+  fetch(API + '/api/admin/cards/' + encodeURIComponent(code) + '/disable', {
+    method: 'POST', headers: apiHeaders()
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){ if(data.success) loadCards(); });
+}
+
+function deleteCard(code){
+  if(!confirm('确定删除此卡密？')) return;
+  fetch(API + '/api/admin/cards/' + encodeURIComponent(code), {
+    method: 'DELETE', headers: apiHeaders()
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){ if(data.success) loadCards(); });
+}
+
+function loadUsers(){
+  fetch(API + '/api/admin/users', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data.success) return;
+      var tbody = document.getElementById('usersTbody');
+      if(data.users.length === 0){
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#666;padding:32px;">暂无用户</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.users.map(function(u){
+        var statusBadge = u.active ? '<span class="badge badge-used">正常</span>' : '<span class="badge badge-expired">未激活/过期</span>';
+        return '<tr>' +
+          '<td class="muted">' + u.userId.substring(0, 12) + '...</td>' +
+          '<td class="code">' + (u.cardCode || '-') + '</td>' +
+          '<td>' + statusBadge + '</td>' +
+          '<td>' + u.daysLeft + '天</td>' +
+          '<td>' + u.liveSubs + '/' + u.maxLiveSubs + '</td>' +
+          '<td>' + u.weiboSubs + '</td>' +
+          '<td>' + (u.pushType || '-') + '</td>' +
+          '<td class="muted">' + (u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : '-') + '</td>' +
+        '</tr>';
+      }).join('');
+    });
+}
+
+// 自动登录
+if(adminToken){
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('adminView').style.display = 'block';
+  loadCards();
+}
+</script>
+</body>
+</html>

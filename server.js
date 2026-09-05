@@ -16,11 +16,23 @@ const crypto = require('crypto');
 const store = require('./lib/store');
 const push = require('./lib/push');
 const weibo = require('./lib/weibo');
+const cards = require('./lib/cards');
 
 // ---- 配置 ----
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const POLL_INTERVAL = parseInt(process.env.LIVE_POLL_MS || '60000', 10);
 const STAGGER_MS = 2000;
+
+// 管理员 Token（用于管理后台）
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || (function () {
+  const t = crypto.randomBytes(16).toString('hex');
+  console.log('========================================');
+  console.log('⚠️  未设置 ADMIN_TOKEN,已自动生成（重启后会变！）');
+  console.log('   管理后台 Token:', t);
+  console.log('   请在环境变量中设置 ADMIN_TOKEN 以固定 Token');
+  console.log('========================================');
+  return t;
+})();
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
@@ -123,6 +135,47 @@ async function resolveDouyinRoomId(shortUrl) {
 
 function parseDouyinRoom(html) {
   if (!html || html.length < 1000) return null;
+
+  // === 新版(2024+):数据在 __pace_f 的 RSC 数据中 ===
+  // 格式: roomStore":{"roomInfo":{...},"liveStatus":"normal"|"live"
+  const paceChunks = [];
+  let paceRe = /__pace_f\.push\(\[1,"(.*?)"\]\)/g;
+  let pm;
+  while ((pm = paceRe.exec(html)) !== null) {
+    paceChunks.push(pm[1].replace(/\\"/g, '"').replace(/\\\//g, '/').replace(/\\n/g, '').replace(/\\\\u002F/g, '/'));
+  }
+  const paceFull = paceChunks.join('');
+
+  // 找 roomStore 下的 roomInfo 和 liveStatus
+  let rsIdx = -1;
+  let rsStart = 0;
+  while (true) {
+    rsIdx = paceFull.indexOf('roomStore', rsStart);
+    if (rsIdx < 0) break;
+    rsStart = rsIdx + 10;
+    const seg = paceFull.substring(rsIdx, rsIdx + 8000);
+    const liveStatusM = seg.match(/"liveStatus"\s*:\s*"([^"]+)"/);
+    const nickM = seg.match(/"nickname"\s*:\s*"([^"]{0,60})"/);
+    const avatarM = seg.match(/"avatar_thumb"\s*:\s*\{[^}]*?"url_list"\s*:\s*\["([^"]+)"/);
+    const webRidM = seg.match(/"web_rid"\s*:\s*"(\d+)"/);
+    const titleM = seg.match(/"title"\s*:\s*"([^"]{0,100})"/);
+    const streamUrlM = seg.match(/"web_stream_url"\s*:\s*(?!null)/);
+    // liveStatus: "normal" = 未开播, "live" = 开播中, "prepare" = 准备中
+    // 跳过没有实际数据的 roomStore(空 roomInfo),找有 nickname 或 web_rid 的
+    if ((liveStatusM || nickM) && (nickM || webRidM)) {
+      const isLive = liveStatusM && (liveStatusM[1] === 'live' || liveStatusM[1] === 'streaming');
+      const hasStream = !!streamUrlM;
+      return {
+        status: (isLive || hasStream) ? 2 : 0,
+        title: titleM ? titleM[1] : '',
+        nickname: nickM ? nickM[1] : '',
+        avatar: avatarM ? avatarM[1].replace(/\\u002F/g, '/') : '',
+        web_rid: webRidM ? webRidM[1] : ''
+      };
+    }
+  }
+
+  // === 旧版兼容:\"room\":{\"id_str\" ===
   const marker1 = '\\"room\\":{\\"id_str\\"';
   let idx = html.indexOf(marker1);
   if (idx >= 0) {
@@ -131,6 +184,8 @@ function parseDouyinRoom(html) {
     const result = extractRoomFromJson(seg);
     if (result && result.status !== null) return result;
   }
+
+  // === 旧版兼容:"room":{ ===
   const marker2 = '"room":{';
   idx = html.indexOf(marker2);
   if (idx >= 0) {
@@ -138,6 +193,8 @@ function parseDouyinRoom(html) {
     const result = extractRoomFromJson(seg);
     if (result && result.status !== null) return result;
   }
+
+  // === 旧版兼容:window.__INIT_PROPS__ ===
   const initProps = html.match(/window\.__INIT_PROPS__\s*=\s*(\{.*?\})\s*;\s*</);
   if (initProps) {
     try {
@@ -146,6 +203,8 @@ function parseDouyinRoom(html) {
       if (roomInfo) return roomInfo;
     } catch (e) {}
   }
+
+  // === 兜底:直接正则 ===
   const statusM = html.match(/"status"\s*:\s*(\d+)/);
   const titleM = html.match(/"title"\s*:\s*"([^"]{0,100})"/);
   const nickM = html.match(/"nickname"\s*:\s*"([^"]{0,60})"/);
@@ -463,6 +522,69 @@ function handleApi(req, res, pathname) {
   const parts = pathname.split('/').filter(Boolean);
   const userId = getUserId(req);
 
+  // ===== 管理员 API（需要 X-Admin-Token）=====
+  const adminToken = (req.headers['x-admin-token'] || '').trim();
+  const isAdmin = adminToken === ADMIN_TOKEN;
+
+  // GET /api/admin/cards - 卡密列表
+  if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'cards' && parts.length === 3) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    return sendJson(res, 200, { success: true, cards: cards.listCards() });
+  }
+
+  // POST /api/admin/cards - 生成卡密
+  if (method === 'POST' && parts[1] === 'admin' && parts[2] === 'cards' && parts.length === 3) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    return readBody(req).then(function (body) {
+      const count = parseInt(body.count, 10) || 1;
+      const days = parseInt(body.days, 10) || 30;
+      const maxLiveSubs = parseInt(body.maxLiveSubs, 10) || 10;
+      const remark = (body.remark || '').trim();
+      const generated = cards.generateCards(count, days, maxLiveSubs, remark);
+      return sendJson(res, 200, { success: true, cards: generated });
+    });
+  }
+
+  // DELETE /api/admin/cards/:code - 删除卡密
+  if (method === 'DELETE' && parts[1] === 'admin' && parts[2] === 'cards' && parts.length === 4) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    const code = decodeURIComponent(parts[3]);
+    const ok = cards.deleteCard(code);
+    return sendJson(res, ok ? 200 : 404, { success: ok });
+  }
+
+  // POST /api/admin/cards/:code/disable - 停用卡密
+  if (method === 'POST' && parts[1] === 'admin' && parts[2] === 'cards' && parts[4] === 'disable' && parts.length === 5) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    const code = decodeURIComponent(parts[3]);
+    const ok = cards.disableCard(code);
+    return sendJson(res, ok ? 200 : 404, { success: ok });
+  }
+
+  // GET /api/admin/users - 用户列表
+  if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'users' && parts.length === 3) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    const userList = [];
+    const allUsers = store.getAllUsers();
+    for (const uid in allUsers) {
+      const u = allUsers[uid];
+      if (!u) continue;
+      const auth = cards.getUserAuth(uid);
+      userList.push({
+        userId: uid,
+        cardCode: auth.cardCode,
+        active: auth.active,
+        expiresAt: auth.expiresAt,
+        daysLeft: auth.daysLeft,
+        maxLiveSubs: auth.maxLiveSubs,
+        liveSubs: (u.subs || []).length,
+        weiboSubs: (u.weiboSubs || []).length,
+        pushType: u.pushType || ''
+      });
+    }
+    return sendJson(res, 200, { success: true, users: userList });
+  }
+
   // GET /api/whoami  - 返回/生成 userId(前端首次访问用来拿 UUID)
   if (method === 'GET' && parts[1] === 'whoami' && parts.length === 2) {
     let uid = userId;
@@ -474,6 +596,30 @@ function handleApi(req, res, pathname) {
 
   // 没带 userId 的请求(除了 whoami)都拒绝
   if (!userId) return sendJson(res, 401, { success: false, error: '缺少 X-User-Id,请刷新页面' });
+
+  // GET /api/auth/status - 查看当前用户授权状态（不需要卡密）
+  if (method === 'GET' && parts[1] === 'auth' && parts[2] === 'status' && parts.length === 3) {
+    const auth = cards.getUserAuth(userId);
+    return sendJson(res, 200, { success: true, auth: auth });
+  }
+
+  // POST /api/auth/activate - 激活卡密（不需要已激活的卡密）
+  if (method === 'POST' && parts[1] === 'auth' && parts[2] === 'activate' && parts.length === 3) {
+    return readBody(req).then(function (body) {
+      const code = (body.code || '').trim().toUpperCase();
+      if (!code) return sendJson(res, 400, { success: false, error: '请输入卡密' });
+      const result = cards.activateCard(code, userId);
+      if (!result.success) return sendJson(res, 400, result);
+      const auth = cards.getUserAuth(userId);
+      return sendJson(res, 200, { success: true, auth: auth });
+    });
+  }
+
+  // 卡密授权检查（除 auth/status、auth/activate 外，所有请求都需要有效卡密）
+  const auth = cards.getUserAuth(userId);
+  if (!auth.active) {
+    return sendJson(res, 403, { success: false, error: '请先激活卡密', needActivate: true });
+  }
 
   // GET /api/subs
   if (method === 'GET' && parts[1] === 'subs' && parts.length === 2) {
@@ -528,6 +674,11 @@ function handleApi(req, res, pathname) {
       const subs = store.getSubs(userId);
       const existing = subs.find(function (s) { return s.platform === parsed.platform && s.roomId === parsed.roomId; });
       if (existing) return sendJson(res, 200, { success: false, error: '该直播间已添加过啦' });
+      // 检查订阅数量上限
+      const userAuth = cards.getUserAuth(userId);
+      if (subs.length >= userAuth.maxLiveSubs) {
+        return sendJson(res, 200, { success: false, error: '订阅数量已达上限(' + userAuth.maxLiveSubs + '个),请升级卡密或删除已有订阅' });
+      }
       const sub = { id: Date.now().toString() + Math.floor(Math.random() * 1000), platform: parsed.platform, roomId: parsed.roomId, uname: '', avatar: '', cover: '', liveStatus: 0, title: '', remark: '' };
       // 检查一次状态
       const info = await checkOneRoom(sub.platform, sub.roomId);
@@ -728,6 +879,7 @@ function startWeiboChecker() {
 function stopWeiboChecker() { if (weiboTimer) { clearInterval(weiboTimer); weiboTimer = null; } }
 
 store.load();
+cards.load();
 const server = http.createServer(handleRequest);
 server.listen(PORT, '0.0.0.0', function () {
   console.log('📡 直播订阅服务(多用户版)已启动');

@@ -293,6 +293,19 @@ header .sub{font-size:11px;opacity:.85;margin-top:2px}
   <div class="footer-note">每 60 秒自动检测一次开播状态<br>请保持本页面打开（可添加到主屏幕使用）</div>
 </div>
 
+<!-- 卡密激活覆盖层 -->
+<div id="activateOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#1a1a2e;border-radius:16px;padding:40px 32px;max-width:400px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+    <div style="font-size:48px;margin-bottom:16px;">🔐</div>
+    <h2 style="color:#fff;margin:0 0 8px;font-size:22px;">请输入卡密激活</h2>
+    <p style="color:#999;margin:0 0 24px;font-size:14px;line-height:1.6;">本服务需激活卡密后使用<br>如有疑问请联系管理员</p>
+    <input id="activateInput" type="text" placeholder="请输入卡密，如 LIVE-XXXX-XXXX-XXXX" 
+      style="width:100%;padding:14px 16px;font-size:15px;border:1px solid #333;border-radius:10px;background:#0f0f1e;color:#fff;box-sizing:border-box;outline:none;text-transform:uppercase;letter-spacing:1px;" />
+    <button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;">激活</button>
+    <div id="activateMsg" style="margin-top:16px;font-size:13px;min-height:20px;"></div>
+  </div>
+</div>
+
 <!-- 悬浮提醒横幅 -->
 <div id="alertBanner">
   <div class="alert-card" id="alertCard">
@@ -822,21 +835,109 @@ document.getElementById('weiboList').addEventListener('click', function(e){
   }
 });
 
+/* ---- 卡密授权 ---- */
+var currentAuth = null;
+
+function checkAuth(callback){
+  fetch(API + '/api/auth/status', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success && data.auth){
+        currentAuth = data.auth;
+        if(data.auth.active){
+          // 已激活
+          document.getElementById('activateOverlay').style.display = 'none';
+          updateUserBoxWithAuth();
+          if(callback) callback();
+        } else {
+          // 未激活
+          showActivateOverlay();
+        }
+      } else {
+        showActivateOverlay();
+      }
+    })
+    .catch(function(){ showActivateOverlay(); });
+}
+
+function showActivateOverlay(){
+  var ov = document.getElementById('activateOverlay');
+  ov.style.display = 'flex';
+  document.getElementById('activateBtn').onclick = doActivate;
+  document.getElementById('activateInput').addEventListener('keypress', function(e){
+    if(e.key === 'Enter') doActivate();
+  });
+}
+
+function doActivate(){
+  var code = document.getElementById('activateInput').value.trim().toUpperCase();
+  var msg = document.getElementById('activateMsg');
+  if(!code){ msg.style.color = '#ff6b6b'; msg.textContent = '请输入卡密'; return; }
+  msg.style.color = '#999'; msg.textContent = '激活中...';
+  fetch(API + '/api/auth/activate', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ code: code })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.success){
+      currentAuth = data.auth;
+      msg.style.color = '#51cf66';
+      msg.textContent = '✅ 激活成功！有效期至 ' + new Date(data.auth.expiresAt).toLocaleDateString();
+      setTimeout(function(){
+        document.getElementById('activateOverlay').style.display = 'none';
+        updateUserBoxWithAuth();
+        loadAfterAuth();
+      }, 1000);
+    } else {
+      msg.style.color = '#ff6b6b';
+      msg.textContent = '❌ ' + (data.error || '激活失败');
+    }
+  })
+  .catch(function(){
+    msg.style.color = '#ff6b6b'; msg.textContent = '网络错误,请重试';
+  });
+}
+
+function updateUserBoxWithAuth(){
+  var uid = getUserId();
+  var box = document.getElementById('userIdBox');
+  if(currentAuth && currentAuth.active){
+    var expDate = new Date(currentAuth.expiresAt);
+    box.innerHTML =
+      '🆔 用户 ID: <b style="color:var(--ink-2)">' + escHtml(uid.substring(0,8)) + '...</b><br>' +
+      '✅ 已激活 | 剩余 <b style="color:#51cf66">' + currentAuth.daysLeft + '</b> 天<br>' +
+      '📺 直播订阅: ' + escHtml((subs||[]).length) + '/' + currentAuth.maxLiveSubs + '<br>' +
+      '<span style="color:var(--ink-3);font-size:11px;">到期: ' + expDate.toLocaleDateString() + '</span>';
+  } else {
+    box.innerHTML =
+      '🆔 用户 ID: <b style="color:var(--ink-2)">' + escHtml(uid.substring(0,8)) + '...</b><br>' +
+      '<span style="color:#ff6b6b">⚠️ 未激活</span>';
+  }
+}
+
+function loadAfterAuth(){
+  loadSettings();
+  loadLocal();
+  syncSubs();
+  syncWeiboSubs();
+  loadPushStatus();
+  connectSSE();
+  setInterval(function(){ syncSubs(); }, 120000);
+  setInterval(function(){ syncWeiboSubs(); }, 120000);
+}
+
 /* ---- 初始化 ---- */
 (function initUserBox(){
   var uid = getUserId();
-  document.getElementById('userIdBox').innerHTML =
-    '🆔 你的用户 ID:<br><b style="color:var(--ink-2)">' + escHtml(uid) + '</b><br>' +
-    '<span style="color:var(--ink-3)">换了浏览器/清了缓存会变成新用户,需重新配置推送</span>';
+  document.getElementById('userIdBox').innerHTML = '🆔 用户 ID 加载中...';
 })();
-loadSettings();
-loadLocal();
-syncSubs();
-syncWeiboSubs();
-loadPushStatus();
-connectSSE();
-setInterval(function(){ syncSubs(); }, 120000);
-setInterval(function(){ syncWeiboSubs(); }, 120000);
+
+// 先检查授权,通过后再加载数据
+checkAuth(function(){
+  // 已激活,加载数据
+});
 </script>
 </body>
 </html>
