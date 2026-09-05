@@ -572,6 +572,16 @@ function handleApi(req, res, pathname) {
     return sendJson(res, ok ? 200 : 404, { success: ok });
   }
 
+  // PATCH /api/admin/cards/:code - 修改卡密备注
+  if (method === 'PATCH' && parts[1] === 'admin' && parts[2] === 'cards' && parts.length === 4) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    const code = decodeURIComponent(parts[3]);
+    return readBody(req).then(function (body) {
+      const ok = cards.updateCardRemark(code, body.remark || '');
+      return sendJson(res, ok ? 200 : 404, { success: ok });
+    });
+  }
+
   // GET /api/admin/users - 用户列表
   if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'users' && parts.length === 3) {
     if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });

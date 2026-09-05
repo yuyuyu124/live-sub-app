@@ -263,6 +263,7 @@ function loadCards(){
           actions = '<button class="btn btn-danger btn-sm" onclick="deleteCard(\'' + c.code + '\')">删除</button>';
         }
         
+        var remarkText = (c.remark || '').replace(/"/g, '&quot;');
         return '<tr>' +
           '<td class="code">' + c.code + '</td>' +
           '<td>' + statusBadge + '</td>' +
@@ -271,7 +272,7 @@ function loadCards(){
           '<td class="muted">' + (c.boundUserId ? c.boundUserId.substring(0,8) + '...' : '-') + '</td>' +
           '<td class="muted">' + (c.activatedAt ? new Date(c.activatedAt).toLocaleDateString() : '-') + '</td>' +
           '<td class="muted">' + (c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : '-') + '</td>' +
-          '<td class="muted">' + (c.remark || '-') + '</td>' +
+          '<td class="muted" style="cursor:pointer;" onclick="editRemark(\'' + c.code + '\', \'' + remarkText + '\')" title="点击修改备注">' + (c.remark || '<span style="color:#bbb;">点击添加</span>') + '</td>' +
           '<td>' + actions + '</td>' +
         '</tr>';
       }).join('');
@@ -294,6 +295,18 @@ function deleteCard(code){
   })
   .then(function(r){ return r.json(); })
   .then(function(data){ if(data.success) loadCards(); });
+}
+
+function editRemark(code, currentRemark){
+  var remark = prompt('修改卡密备注：', currentRemark || '');
+  if(remark === null) return;
+  fetch(API + '/api/admin/cards/' + encodeURIComponent(code), {
+    method: 'PATCH',
+    headers: apiHeaders(),
+    body: JSON.stringify({ remark: remark })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){ if(data.success) loadCards(); else alert('修改失败'); });
 }
 
 var allUsers = [];
