@@ -298,7 +298,7 @@ header .sub{font-size:11px;opacity:.85;margin-top:2px}
   <div style="background:#1a1a2e;border-radius:16px;padding:40px 32px;max-width:400px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
     <div style="font-size:48px;margin-bottom:16px;">🔐</div>
     <h2 style="color:#fff;margin:0 0 8px;font-size:22px;">请输入卡密激活</h2>
-    <p style="color:#999;margin:0 0 24px;font-size:14px;line-height:1.6;">本服务需激活卡密后使用<br>如有疑问请联系管理员</p>
+    <p style="color:#999;margin:0 0 24px;font-size:14px;line-height:1.6;">本服务需激活卡密后使用<br>购买卡密可闲鱼搜索 <b style="color:#ffd43b;">观铃VV</b> 或 <b style="color:#ffd43b;">guanlingV</b> 下单</p>
     <input id="activateInput" type="text" placeholder="请输入卡密，如 LIVE-XXXX-XXXX-XXXX" 
       style="width:100%;padding:14px 16px;font-size:15px;border:1px solid #333;border-radius:10px;background:#0f0f1e;color:#fff;box-sizing:border-box;outline:none;text-transform:uppercase;letter-spacing:1px;" />
     <button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;">激活</button>
@@ -913,7 +913,8 @@ function updateUserBoxWithAuth(){
   } else {
     box.innerHTML =
       '🆔 用户 ID: <b style="color:var(--ink-2)">' + escHtml(uid.substring(0,8)) + '...</b><br>' +
-      '<span style="color:#ff6b6b">⚠️ 未激活</span>';
+      '<span style="color:#ff6b6b">⚠️ 未激活</span><br>' +
+      '<span style="color:var(--ink-3);font-size:11px;">购卡闲鱼搜索 观铃VV / guanlingV</span>';
   }
 }
 

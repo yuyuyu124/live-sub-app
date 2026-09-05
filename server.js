@@ -726,7 +726,7 @@ function handleApi(req, res, pathname) {
       // 检查订阅数量上限
       const userAuth = cards.getUserAuth(userId);
       if (subs.length >= userAuth.maxLiveSubs) {
-        return sendJson(res, 200, { success: false, error: '订阅数量已达上限(' + userAuth.maxLiveSubs + '个),请升级卡密或删除已有订阅' });
+        return sendJson(res, 200, { success: false, error: '订阅数量已达上限(' + userAuth.maxLiveSubs + '个),请升级卡密或删除已有订阅。购买/升级卡密可闲鱼搜索 观铃VV 或 guanlingV' });
       }
       const sub = { id: Date.now().toString() + Math.floor(Math.random() * 1000), platform: parsed.platform, roomId: parsed.roomId, uname: '', avatar: '', cover: '', liveStatus: 0, title: '', remark: '' };
       // 检查一次状态
