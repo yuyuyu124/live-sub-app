@@ -937,7 +937,7 @@ function loadAfterAuth(){
 
 // 先检查授权,通过后再加载数据
 checkAuth(function(){
-  // 已激活,加载数据
+  loadAfterAuth();
 });
 </script>
 </body>
