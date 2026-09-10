@@ -521,6 +521,15 @@ function getUserId(req) {
   return uid;
 }
 
+function getClientIp(req) {
+  // nginx 反代(deploy.sh)注入 X-Forwarded-For 和 X-Real-IP
+  const xff = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  if (xff && xff !== 'unknown') return xff;
+  const xreal = (req.headers['x-real-ip'] || '').trim();
+  if (xreal) return xreal;
+  return (req.socket.remoteAddress || '').replace(/^::ffff:/, '') || '';
+}
+
 function genUserId() {
   return crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).substring(2, 10));
 }
@@ -664,10 +673,31 @@ function handleApi(req, res, pathname) {
     });
   }
 
-  // 卡密授权检查（除 auth/status、auth/activate 外，所有请求都需要有效卡密）
+  // POST /api/trial/start - 启动免费试用(不需要已激活的卡密)
+  if (method === 'POST' && parts[1] === 'trial' && parts[2] === 'start' && parts.length === 3) {
+    return readBody(req).then(function () {
+      const ip = getClientIp(req);
+      const result = cards.startTrial(userId, ip);
+      if (!result.success) return sendJson(res, 400, result);
+      const auth = cards.getUserAuth(userId);
+      return sendJson(res, 200, { success: true, auth: auth });
+    });
+  }
+
+  // 卡密授权检查（除 auth/status、auth/activate、trial/start 外，所有请求都需要有效卡密）
   const auth = cards.getUserAuth(userId);
   if (!auth.active) {
-    return sendJson(res, 403, { success: false, error: '请先激活卡密', needActivate: true });
+    // 试用已到期的用户:允许只读 GET /api/subs 查看保留的订阅列表
+    const isReadOnlyGet = method === 'GET' && parts[1] === 'subs' && parts.length === 2;
+    if (!(auth.expiredTrial && isReadOnlyGet)) {
+      return sendJson(res, 403, {
+        success: false,
+        error: auth.expiredTrial ? '试用已结束,请激活正式卡密继续使用' : '请先激活卡密',
+        needActivate: true,
+        expiredTrial: auth.expiredTrial
+      });
+    }
+    // expiredTrial + GET /api/subs:落到下方只读分支
   }
 
   // GET /api/subs
