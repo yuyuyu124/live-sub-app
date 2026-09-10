@@ -70,6 +70,55 @@ async function liveReq(urlStr, options) {
 }
 
 // ============================================================
+// 抖音 API 方式检测(绕过网页风控)
+async function douyinGetAPI(roomId) {
+  const now = Math.floor(Date.now() / 1000);
+  const msToken = Math.random().toString(36).substring(2, 34);
+  const ttwid = '1%7C' + Date.now() + '%7C1%7C0%7C1%7C' + Math.random().toString(36).substring(2, 18);
+  const cookie = 'msToken=' + msToken + '; ttwid=' + ttwid + '; IsDouyinOpen=false; s_v_web_id=verify_' + msToken.substring(0, 20);
+  
+  // 用 API 接口获取直播状态
+  const apiUrl = 'https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;
+  const headers = {
+    'User-Agent': UA,
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'zh-CN,zh;q=0.9',
+    'Referer': 'https://live.douyin.com/' + roomId,
+    'Cookie': cookie,
+    'sec-ch-ua': '"Chromium";v="126", "Google Chrome";v="126", "Not.A.Brand";v="24"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin'
+  };
+  try {
+    const resp = await fetch(apiUrl, { headers: headers, redirect: 'follow' });
+    const body = await resp.text();
+    const data = JSON.parse(body);
+    if (data && data.data && data.data.room) {
+      const room = data.data.room;
+      const status = (room.status === 2) ? 2 : 0;
+      const title = (room.title) || '';
+      const nickname = (data.data.user && data.data.user.nickname) || (room.nickname) || '';
+      const avatar = (data.data.user && data.data.user.avatar_thumb && data.data.user.avatar_thumb.url_list && data.data.user.avatar_thumb.url_list[0]) || '';
+      const streamUrl = room.stream_url;
+      const hasStream = !!(streamUrl && streamUrl.live_push_url);
+      return {
+        status: (status === 2 || hasStream) ? 2 : 0,
+        title: title,
+        nickname: nickname,
+        avatar: avatar,
+        web_rid: roomId
+      };
+    }
+    return null;
+  } catch (e) {
+    // API 失败,回退到网页方式
+    return null;
+  }
+}
+
 // 抖音反风控 Cookie
 // ============================================================
 function genDouyinCookie() {
@@ -290,8 +339,15 @@ async function checkOneRoom(platform, roomId) {
         return result;
       }
     } else if (platform === 'douyin') {
-      const pageResp = await douyinGet('https://live.douyin.com/' + roomId);
-      const room = parseDouyinRoom(pageResp.body || '');
+      // 优先用 API 接口(绕过网页风控)
+      let room = await douyinGetAPI(roomId);
+      if (!room) {
+        // API 失败,回退到网页方式
+        const pageResp = await douyinGet('https://live.douyin.com/' + roomId);
+        if (pageResp.body && pageResp.body.length > 3000 && pageResp.body.indexOf('验证码') < 0) {
+          room = parseDouyinRoom(pageResp.body);
+        }
+      }
       return {
         liveStatus: (room && room.status === 2) ? 1 : 0,
         title: (room && room.title) || '',
