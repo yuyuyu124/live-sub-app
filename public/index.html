@@ -1,373 +1,8 @@
-<html lang="zh-CN"><head>
-<meta charset="UTF-8">
-<!-- 优化:移除 user-scalable=no,恢复用户缩放能力(可访问性) -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#E14E80">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>直播订阅</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<style>
-/* ============================================================
-   直播订阅 · 排版优化版
-   主要改动:
-   1. 修复 header 负 margin 导致的横向溢出与内容裁切
-   2. 修复 header 三元素 space-between 分散布局,徽章收拢到右侧
-   3. 建立清晰字号层级:19/15/14/12,消除 8~11px 不可读文字
-   4. 加深辅助文字色,全部达到 WCAG AA 对比度
-   5. 删除重复媒体查询,grid 改用语义 class 替代脆弱的 nth-of-type
-   6. 合并底部零散文字块,统一页脚
-   7. 激活弹窗改为与全站一致的浅色粉系风格
-   8. 下拉框补箭头、触控目标加大、补 focus-visible 与 reduced-motion
-   ============================================================ */
-:root{
-  --pink-0:#FFF6F9; --pink-1:#FBE6EE; --pink-2:#F6CDDD; --pink-3:#F2A7BE;
-  --rose:#FF6B9D; --rose-d:#E8557F; --rose-dd:#D63E6B;
-  /* 优化:ink-2/ink-3 加深,白底对比度分别达到约 5.9:1 / 4.7:1,满足 WCAG AA */
-  --ink:#5a3a4a; --ink-2:#7f5364; --ink-3:#8f5f73;
-  --card:#FFFFFF; --line:#F3D9E5; --green:#6BCB77; --green-d:#3f9e52;
-  --safe-top:env(safe-area-inset-top, 0px);
-  --safe-bottom:env(safe-area-inset-bottom, 0px);
-  --radius-card:18px; --radius-ctl:12px;
-  --shadow-card:0 4px 16px rgba(232,85,127,.08);
-}
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%}
-body{
-  font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",-apple-system,sans-serif;
-  font-size:14px;line-height:1.5;
-  color:var(--ink);background:
-    radial-gradient(600px 300px at 90% -5%, var(--pink-1), transparent 60%),
-    radial-gradient(500px 250px at 0% 5%, #FFF0F4, transparent 55%),
-    linear-gradient(180deg,#FFF9FB 0%,#FFF3F7 100%);
-  min-height:100vh;padding-bottom:calc(32px + var(--safe-bottom));
-  user-select:none;-webkit-user-select:none;
-}
-/* 优化:需要复制的信息恢复可选中 */
-input,.userid-box,.live-name,.live-title,.footer-note{user-select:text;-webkit-user-select:text}
-
-.app{max-width:480px;margin:0 auto;padding:0 16px}
-
-/* ---------- 头部:修复负 margin 溢出,徽章收拢 ---------- */
-header{
-  position:sticky;top:0;z-index:30;
-  background:linear-gradient(120deg,#E14E80 0%,#EC6B93 100%);
-  color:#fff;
-  box-shadow:0 4px 18px rgba(214,62,107,.28);
-  margin-bottom:16px;
-}
-.header-inner{
-  max-width:480px;margin:0 auto;
-  padding:calc(12px + var(--safe-top)) 16px 12px;
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-}
-.brand{min-width:0}
-header .title{font-size:19px;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:8px;line-height:1.3}
-header .title .ic{display:inline-flex;flex-shrink:0}
-header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shadow:0 1px 2px rgba(160,30,70,.35)}
-/* 优化:两个状态徽章收进同一容器,视觉成组、不再漂移 */
-.header-side{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.live-badge,.push-status-bar{
-  background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.38);
-  padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;color:#fff;
-  display:flex;align-items:center;gap:6px;white-space:nowrap;
-}
-.live-badge .dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1.6s ease-in-out infinite;flex-shrink:0}
-.push-status-bar .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.push-status-bar.green .dot{background:#8FF0A4}
-.push-status-bar.yellow .dot{background:#FFD166}
-.push-status-bar.red .dot{background:#FF8A8A;animation:pulse 1.6s ease-in-out infinite}
-.live-badge.hidden{opacity:.6}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.75)}}
-
-/* ---------- 卡片 ---------- */
-.card{
-  background:var(--card);border:1px solid var(--line);border-radius:var(--radius-card);
-  padding:18px;margin-bottom:16px;box-shadow:var(--shadow-card);
-}
-/* 优化:卡片标题 15px,与正文拉开层级 */
-.card-title{font-size:15px;font-weight:700;color:var(--rose-dd);margin-bottom:14px;display:flex;align-items:center;gap:7px}
-.card-title .ic{display:inline-flex;color:var(--rose-d)}
-.card-title .ic svg{display:block}
-
-/* ---------- 添加订阅 ---------- */
-.add-row{display:flex;gap:8px;margin-bottom:10px}
-.add-row:last-of-type{margin-bottom:8px}
-/* 优化:appearance:none 后补上自定义箭头,恢复下拉框可辨识度 */
-.platform-select{
-  flex-shrink:0;border:1px solid var(--line);border-radius:var(--radius-ctl);background:var(--pink-0);
-  color:var(--ink);font-size:14px;font-weight:600;padding:0 24px 0 10px;outline:none;appearance:none;
-  -webkit-appearance:none;cursor:pointer;min-height:44px;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237f5364' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 8px center;
-}
-.text-input{
-  flex:1;min-width:0;border:1.5px solid var(--line);border-radius:var(--radius-ctl);background:#fff;
-  color:var(--ink);font-size:14px;padding:11px 12px;outline:none;min-height:44px;
-  transition:border-color .2s, box-shadow .2s;
-}
-.text-input:focus{border-color:var(--rose);box-shadow:0 0 0 3px rgba(255,107,157,.15)}
-.text-input::placeholder{color:var(--ink-3)}
-.btn-primary{
-  flex-shrink:0;border:none;border-radius:var(--radius-ctl);background:linear-gradient(135deg,#FF6B9D,#FF8FB1);
-  color:#fff;font-size:14px;font-weight:600;padding:0 18px;min-height:44px;cursor:pointer;
-  box-shadow:0 3px 10px rgba(255,107,157,.3);
-  transition:transform .15s, box-shadow .2s, opacity .2s;
-}
-@media (hover:hover){.btn-primary:hover{box-shadow:0 5px 14px rgba(255,107,157,.4)}}
-.btn-primary:active{transform:scale(.96)}
-.btn-primary:disabled{opacity:.6;cursor:default}
-/* 优化:提示文字 11px→12px,颜色对比度达标 */
-.add-hint{font-size:12px;color:var(--ink-3);line-height:1.6;margin-bottom:4px}
-.add-divider{display:flex;align-items:center;gap:10px;color:var(--ink-3);font-size:12px;margin:12px 0}
-.add-divider::before,.add-divider::after{content:"";flex:1;height:1px;background:var(--line)}
-
-/* ---------- 订阅列表 ---------- */
-.list-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.list-head span{font-size:15px;font-weight:700;color:var(--ink)}
-.btn-text{
-  border:none;background:var(--pink-1);color:var(--rose-dd);font-size:12px;font-weight:600;
-  padding:7px 14px;border-radius:10px;cursor:pointer;min-height:32px;
-  transition:background .2s, opacity .2s;
-}
-@media (hover:hover){.btn-text:hover{background:var(--pink-2)}}
-.btn-text:disabled{opacity:.6}
-.live-list{display:flex;flex-direction:column;gap:10px;max-height:46vh;overflow-y:auto}
-.live-list::-webkit-scrollbar{width:4px}
-.live-list::-webkit-scrollbar-thumb{background:var(--pink-2);border-radius:10px}
-/* 优化:空状态压缩留白、加大视觉符号、文字 12px 且对比度达标 */
-.live-empty{
-  text-align:center;color:var(--ink-2);font-size:12px;padding:22px 12px;line-height:1.8;
-  display:flex;flex-direction:column;align-items:center;gap:6px;
-}
-.live-empty::before{content:"📺";font-size:28px;line-height:1;opacity:.85}
-.live-item{
-  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;
-  background:var(--pink-0);border:1px solid var(--line);
-  transition:border-color .2s, background .2s;
-}
-.live-item.live-on{border-color:var(--rose);background:linear-gradient(135deg,rgba(255,182,200,.14),rgba(255,210,220,.06))}
-.avatar-wrap{position:relative;flex-shrink:0}
-.live-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--pink-1)}
-.avatar-ph{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--rose);background:var(--pink-1)}
-.live-dot-badge{
-  position:absolute;bottom:-1px;right:-1px;width:14px;height:14px;border-radius:50%;
-  background:var(--rose);border:2px solid #fff;display:none;
-}
-.live-item.live-on .live-dot-badge{display:block}
-.live-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.live-name{font-size:14px;color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* 优化:11px→12px */
-.live-title{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* 优化:状态徽章 10px→11px,加重字重保证可辨 */
-.live-status{font-size:11px;padding:4px 10px;border-radius:9px;flex-shrink:0;font-weight:700}
-.live-status.on{background:rgba(255,105,135,.15);color:var(--rose-dd);animation:pulse 2s ease-in-out infinite}
-.live-status.off{background:var(--pink-1);color:var(--ink-2)}
-.live-act{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
-/* 优化:触控目标 30px→34px */
-.icon-btn{
-  width:34px;height:34px;border-radius:10px;border:none;background:var(--pink-1);color:var(--ink-2);
-  font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:transform .15s, background .2s, color .2s;
-}
-@media (hover:hover){.icon-btn:hover{background:var(--pink-2);color:var(--ink)}}
-.icon-btn:active{transform:scale(.9)}
-.icon-btn.del:active{background:rgba(255,105,135,.18);color:var(--rose-dd)}
-
-/* ---------- 设置 ---------- */
-.setting-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.setting-item:last-child{border-bottom:none}
-.setting-info{flex:1;min-width:180px}
-.setting-info .si-title{font-size:14px;color:var(--ink);font-weight:600}
-/* 优化:11px→12px */
-.setting-info .si-desc{font-size:12px;color:var(--ink-3);margin-top:3px;line-height:1.6}
-.switch{position:relative;display:inline-block;width:48px;height:28px;flex-shrink:0}
-.switch input{opacity:0;width:0;height:0}
-.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--pink-2);border-radius:20px;transition:background .3s}
-.slider::before{content:"";position:absolute;height:22px;width:22px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:transform .3s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-.switch input:checked + .slider{background:var(--rose)}
-.switch input:checked + .slider::before{transform:translateX(20px)}
-.switch input:focus-visible + .slider{outline:2px solid var(--rose-d);outline-offset:2px}
-.time-row{display:flex;align-items:center;gap:8px}
-.time-row input[type=time]{
-  border:1px solid var(--line);border-radius:10px;background:var(--pink-0);color:var(--ink);
-  font-size:13px;padding:8px 10px;outline:none;min-height:38px;
-  transition:border-color .2s;
-}
-.time-row input[type=time]:focus{border-color:var(--rose)}
-.btn-soft{
-  border:1px solid var(--line);border-radius:10px;background:var(--pink-0);color:var(--rose-dd);
-  font-size:12px;font-weight:600;padding:9px 16px;cursor:pointer;min-height:36px;
-  transition:background .2s, border-color .2s;
-}
-@media (hover:hover){.btn-soft:hover{background:var(--pink-1);border-color:var(--pink-3)}}
-.btn-soft:active{transform:scale(.96)}
-.push-link{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;text-decoration:none;color:inherit;
-  width:100%;border-radius:10px;
-}
-.push-link .arrow{color:var(--ink-3);font-size:16px;flex-shrink:0}
-.push-status{font-size:11px;font-weight:700;padding:4px 10px;border-radius:9px;flex-shrink:0}
-.push-status.on{background:rgba(107,203,119,.16);color:var(--green-d)}
-.push-status.off{background:var(--pink-1);color:var(--ink-2)}
-/* 优化:10px→12px,允许选中复制 */
-.userid-box{font-size:12px;color:var(--ink-2);background:#FFF6F9;border:1px dashed var(--pink-2);border-radius:10px;padding:9px 12px;margin-top:12px;word-break:break-all;line-height:1.7}
-
-/* ---------- 悬浮提醒横幅 ---------- */
-#alertBanner{
-  position:fixed;top:0;left:0;right:0;z-index:100;
-  transform:translateY(-110%);transition:transform .45s cubic-bezier(.22,1,.36,1);
-}
-#alertBanner.show{transform:translateY(0)}
-.alert-card{
-  margin:calc(8px + var(--safe-top)) 12px 0;border-radius:18px;overflow:hidden;
-  background:linear-gradient(135deg,rgba(255,245,248,.97),rgba(255,235,240,.95));
-  border:1.5px solid rgba(255,150,180,.55);
-  box-shadow:0 8px 30px rgba(255,107,157,.3),0 2px 8px rgba(0,0,0,.08);
-  animation:glow 2.5s ease-in-out infinite;
-}
-@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(255,107,157,.35),0 8px 30px rgba(255,107,157,.3)}50%{box-shadow:0 0 0 8px rgba(255,107,157,0),0 8px 30px rgba(255,107,157,.4)}}
-.alert-shimmer{height:3px;background:linear-gradient(90deg,transparent,rgba(255,107,157,.85),transparent);background-size:200% 100%;animation:shimmer 2s linear infinite}
-@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-.alert-body{display:flex;gap:12px;padding:14px}
-.alert-cover{position:relative;flex-shrink:0;width:64px;height:64px;border-radius:14px;overflow:hidden;border:2px solid rgba(255,150,180,.6)}
-.alert-cover img{width:100%;height:100%;object-fit:cover}
-.alert-cover .ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;background:linear-gradient(135deg,#FFC0CB,#FFB6C1)}
-/* 优化:8px→10px */
-.live-tag{position:absolute;top:3px;left:3px;background:rgba(214,40,80,.92);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;display:flex;align-items:center;gap:3px}
-.live-tag .d{width:4px;height:4px;border-radius:50%;background:#fff;animation:pulse 1.2s ease-in-out infinite}
-.alert-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-/* 优化:9px→11px */
-.alert-platform{font-size:11px;font-weight:700;color:#b04a78;letter-spacing:.3px}
-.alert-name{font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.alert-title{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.alert-btns{display:flex;gap:8px;margin-top:8px}
-.btn-watch{flex:1;font-size:12px;font-weight:600;text-align:center;padding:9px 0;border-radius:11px;background:linear-gradient(135deg,#FF6B9D,#FF8FB1);color:#fff;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(255,107,157,.3)}
-.btn-received{flex:1;font-size:12px;font-weight:600;text-align:center;padding:9px 0;border-radius:11px;background:linear-gradient(135deg,#6BCB77,#8FDB9F);color:#fff;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(107,203,119,.3)}
-.btn-later{font-size:12px;font-weight:600;padding:9px 14px;border-radius:11px;background:rgba(255,255,255,.65);color:var(--ink-2);border:1px solid rgba(200,150,170,.3);cursor:pointer}
-.alert-progress{height:3px;background:rgba(255,150,180,.15)}
-.alert-progress-fill{height:100%;width:100%;background:linear-gradient(90deg,#FF6B9D,#FFB6C1);transition:width .1s linear}
-
-/* ---------- Toast ---------- */
-#toast{
-  position:fixed;left:50%;bottom:calc(60px + var(--safe-bottom));transform:translateX(-50%) translateY(20px);
-  background:rgba(60,35,45,.92);color:#fff;font-size:13px;padding:10px 18px;border-radius:12px;
-  opacity:0;pointer-events:none;transition:opacity .3s, transform .3s;z-index:200;max-width:80%;text-align:center;
-}
-#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-
-/* ---------- 页脚:合并为零散两块为统一一块 ---------- */
-.page-footer{
-  text-align:center;color:var(--ink-3);font-size:12px;line-height:1.8;padding:4px 16px 16px;
-}
-.page-footer .author{margin-top:8px;color:var(--ink-2);font-weight:600}
-
-/* ---------- 置顶公告 ---------- */
-.announcement{background:linear-gradient(135deg,#FFF5E6,#FFE8CC);border:1px solid #FFD9A3;border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#8a5a2b;line-height:1.6}
-.announcement .ic{font-size:15px;flex-shrink:0;margin-top:1px}
-.announcement .txt{flex:1}
-/* 优化:关闭按钮 20px→24px 触控目标 */
-.announcement .close{flex-shrink:0;width:24px;height:24px;border:none;background:rgba(138,90,43,.12);color:#8a5a2b;border-radius:50%;font-size:12px;cursor:pointer}
-
-/* ---------- 激活弹窗:与全站统一的浅色粉系 ---------- */
-.overlay{
-  position:fixed;inset:0;z-index:9999;
-  background:rgba(90,40,60,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  display:flex;align-items:center;justify-content:center;padding:20px;
-}
-.overlay-card{
-  background:#FFFDFE;border:1px solid var(--pink-2);border-radius:20px;
-  padding:32px 26px;max-width:400px;width:100%;text-align:center;
-  box-shadow:0 20px 60px rgba(214,62,107,.25);
-}
-.overlay-card .lock{
-  width:56px;height:56px;margin:0 auto 14px;border-radius:16px;
-  background:linear-gradient(135deg,#FF6B9D,#FF8FB1);
-  display:flex;align-items:center;justify-content:center;color:#fff;
-  box-shadow:0 6px 16px rgba(255,107,157,.35);
-}
-.overlay-card h2{color:var(--ink);margin:0 0 8px;font-size:20px;font-weight:700}
-.overlay-card p{color:var(--ink-2);margin:0 0 20px;font-size:13px;line-height:1.7}
-.overlay-card p b{color:var(--rose-dd)}
-#activateInput{
-  width:100%;padding:13px 16px;font-size:15px;border:1.5px solid var(--line);border-radius:12px;
-  background:var(--pink-0);color:var(--ink);box-sizing:border-box;outline:none;
-  text-transform:uppercase;letter-spacing:1px;min-height:46px;
-  transition:border-color .2s, box-shadow .2s;
-}
-#activateInput:focus{border-color:var(--rose);box-shadow:0 0 0 3px rgba(255,107,157,.15);background:#fff}
-#activateInput::placeholder{color:var(--ink-3);text-transform:none;letter-spacing:0}
-#activateBtn{
-  width:100%;margin-top:14px;padding:13px;font-size:16px;font-weight:700;border:none;border-radius:12px;
-  background:linear-gradient(135deg,#FF6B9D,#FF8FB1);color:#fff;cursor:pointer;min-height:48px;
-  box-shadow:0 4px 14px rgba(255,107,157,.35);
-  transition:transform .15s, box-shadow .2s;
-}
-#activateBtn:active{transform:scale(.98)}
-#activateMsg{margin-top:14px;font-size:13px;min-height:20px;line-height:1.5}
-
-/* ---------- 键盘可访问性 ---------- */
-:focus-visible{outline:2px solid var(--rose-d);outline-offset:2px;border-radius:4px}
-.text-input:focus-visible,.time-row input:focus-visible,#activateInput:focus-visible{outline:none}
-
-/* ---------- 减少动态效果偏好 ---------- */
-@media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
-  #alertBanner{transition:none}
-}
-
-/* ============ 平板(768-899px):单列加宽 ============ */
-@media (min-width:768px){
-  .app{max-width:640px;padding:0 20px}
-  .header-inner{max-width:640px;padding-left:20px;padding-right:20px}
-}
-
-/* ============ PC 端(≥900px) 双列布局 ============ */
-@media (min-width:900px){
-  body{padding-bottom:20px}
-  .app{
-    max-width:1120px;padding:0 24px;
-    display:grid;grid-template-columns:minmax(0,1fr) 360px;
-    grid-template-areas:
-      "ann ann"
-      "add set"
-      "list set"
-      "ftr ftr";
-    gap:16px;grid-auto-rows:min-content;
-  }
-  .header-inner{max-width:1120px;padding-left:24px;padding-right:24px}
-  header{margin-bottom:18px}
-  header .title{font-size:20px}
-
-  .announcement{grid-area:ann;margin-bottom:0}
-  .card-add{grid-area:add}
-  .card-list{grid-area:list}
-  .card-set{grid-area:set;position:sticky;top:calc(84px + var(--safe-top));align-self:start}
-  .card{padding:16px 18px;margin-bottom:0}
-  .page-footer{grid-area:ftr;padding:8px 0 12px}
-
-  /* 订阅列表双列 */
-  .live-list{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:none}
-  .live-item{padding:9px 12px}
-  .live-avatar,.avatar-ph{width:40px;height:40px;font-size:15px}
-}
-
-/* ============ 大屏(≥1400px) ============ */
-@media (min-width:1400px){
-  .app{max-width:1240px;grid-template-columns:minmax(0,1fr) 400px}
-  .header-inner{max-width:1240px}
-}
-</style>
-</head>
-<body>
-<header>
-  <div class="header-inner">
-    <div class="brand">
-      <div class="title">
-        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2"></path><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"></circle><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path><path d="M19.1 4.9a10 10 0 0 1 0 14.2"></path></svg></span>
-        直播订阅
-      </div>
+<button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;">激活</button>
+    <div style="margin-top:12px;font-size:12px;color:#666;text-align:center">— 或 —</div>
+    <button id="trialBtn" style="width:100%;margin-top:8px;padding:13px;font-size:15px;font-weight:600;border:1.5px solid #667eea;border-radius:10px;background:transparent;color:#667eea;cursor:pointer;">🎉 免费试用 3 天</button>
+    <div id="trialHint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">试用期间:1 个订阅 + 完整推送(同 IP 24 小时仅可试用 1 次)</div>
+    <div id="activateMsg" style="margin-top:16px;font-size:13px;min-height:20px;"></div>
       <div class="sub">B站 · 抖音 开播提醒</div>
     </div>
     <div class="header-side">
@@ -954,13 +589,15 @@ function checkAuth(callback){
       if(data.success && data.auth){
         currentAuth = data.auth;
         if(data.auth.active){
-          // 已激活
           document.getElementById('activateOverlay').style.display = 'none';
           updateUserBoxWithAuth();
           showAnnouncement();
           if(callback) callback();
+        } else if(data.auth.expiredTrial){
+          showActivateOverlay();
+          updateUserBoxWithAuth();
+          loadAfterAuth();
         } else {
-          // 未激活
           showActivateOverlay();
         }
       } else {
@@ -974,6 +611,8 @@ function showActivateOverlay(){
   var ov = document.getElementById('activateOverlay');
   ov.style.display = 'flex';
   document.getElementById('activateBtn').onclick = doActivate;
+  var trialBtn = document.getElementById('trialBtn');
+  if(trialBtn) trialBtn.onclick = startTrial;
   document.getElementById('activateInput').addEventListener('keypress', function(e){
     if(e.key === 'Enter') doActivate();
   });
@@ -1010,16 +649,56 @@ function doActivate(){
   });
 }
 
+function startTrial(){
+  var btn = document.getElementById('trialBtn');
+  var msg = document.getElementById('activateMsg');
+  btn.disabled = true; btn.textContent = '启动中...';
+  fetch(API + '/api/trial/start', {
+    method: 'POST',
+    headers: apiHeaders()
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.success){
+      currentAuth = data.auth;
+      msg.style.color = '#51cf66';
+      msg.textContent = '✅ 试用已启动!3 天内有效';
+      setTimeout(function(){
+        document.getElementById('activateOverlay').style.display = 'none';
+        updateUserBoxWithAuth();
+        loadAfterAuth();
+      }, 800);
+    } else {
+      msg.style.color = '#ff6b6b';
+      msg.textContent = '❌ ' + (data.error || '试用启动失败');
+    }
+  })
+  .catch(function(){
+    msg.style.color = '#ff6b6b';
+    msg.textContent = '网络错误,请重试';
+  })
+  .finally(function(){
+    btn.disabled = false;
+    btn.textContent = '🎉 免费试用 3 天';
+  });
+}
+
 function updateUserBoxWithAuth(){
   var uid = getUserId();
   var box = document.getElementById('userIdBox');
   if(currentAuth && currentAuth.active){
     var expDate = new Date(currentAuth.expiresAt);
+    var planLabel = currentAuth.type === 'trial' ? '🎉 试用中' : '✅ 正式会员';
     box.innerHTML =
       '🆔 用户 ID: <b style="color:var(--ink-2)">' + escHtml(uid.substring(0,8)) + '...</b><br>' +
-      '✅ 已激活 | 剩余 <b style="color:#51cf66">' + currentAuth.daysLeft + '</b> 天<br>' +
+      planLabel + ' | 剩余 <b style="color:#51cf66">' + currentAuth.daysLeft + '</b> 天<br>' +
       '📺 直播订阅: ' + escHtml((subs||[]).length) + '/' + currentAuth.maxLiveSubs + '<br>' +
       '<span style="color:var(--ink-3);font-size:11px;">到期: ' + expDate.toLocaleDateString() + '</span>';
+  } else if(currentAuth && currentAuth.expiredTrial) {
+    box.innerHTML =
+      '🆔 用户 ID: <b style="color:var(--ink-2)">' + escHtml(uid.substring(0,8)) + '...</b><br>' +
+      '<span style="color:#ffa500">⏸️ 试用已结束</span><br>' +
+      '<span style="color:var(--ink-3);font-size:11px;">订阅数据已保留,激活正式卡密即可恢复</span>';
   } else {
     box.innerHTML =
       '🆔 用户 ID: <b style="color:var(--ink-2)">' + escHtml(uid.substring(0,8)) + '...</b><br>' +
