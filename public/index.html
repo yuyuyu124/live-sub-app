@@ -1057,11 +1057,19 @@ function updateUserBoxWithAuth(){
   if(currentAuth && currentAuth.active){
     var expDate = new Date(currentAuth.expiresAt);
     var planLabel = currentAuth.type === 'trial' ? '🎉 试用中' : '✅ 正式会员';
+    var trialActivateHtml = currentAuth.type === 'trial'
+      ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,0.1)">' +
+        '<input id="trialActivateInput" placeholder="输入正式卡密" style="width:60%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
+        '<button id="trialActivateBtn" onclick="activateFromTrial()" style="margin-left:4px;padding:6px 12px;font-size:12px;font-weight:600;border:none;border-radius:6px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;vertical:middle">激活</button>' +
+        '<span id="trialActivateMsg" style="display:block;margin-top:4px;font-size:11px;min-height:14px"></span>' +
+        '</div>'
+      : '';
     box.innerHTML =
       '🆔 用户 ID: <b style="color:var(--ink-2)">' + escHtml(uid.substring(0,8)) + '...</b><br>' +
       planLabel + ' | 剩余 <b style="color:#51cf66">' + currentAuth.daysLeft + '</b> 天<br>' +
       '📺 直播订阅: ' + escHtml((subs||[]).length) + '/' + currentAuth.maxLiveSubs + '<br>' +
-      '<span style="color:var(--ink-3);font-size:11px;">到期: ' + expDate.toLocaleDateString() + '</span>';
+      '<span style="color:var(--ink-3);font-size:11px;">到期: ' + expDate.toLocaleDateString() + '</span>' +
+      trialActivateHtml;
   } else if(currentAuth && currentAuth.expiredTrial) {
     box.innerHTML =
       '🆔 用户 ID: <b style="color:var(--ink-2)">' + escHtml(uid.substring(0,8)) + '...</b><br>' +
@@ -1074,6 +1082,44 @@ function updateUserBoxWithAuth(){
       '<span style="color:var(--ink-3);font-size:11px;">购卡闲鱼搜索观铃VV或小红书号guanlingV</span>';
   }
   }
+
+function activateFromTrial(){
+  var input = document.getElementById('trialActivateInput');
+  var btn = document.getElementById('trialActivateBtn');
+  var msg = document.getElementById('trialActivateMsg');
+  if(!input || !btn) return;
+  var code = input.value.trim().toUpperCase();
+  if(!code){ msg.style.color = '#ff6b6b'; msg.textContent = '请输入卡密'; return; }
+  btn.disabled = true; btn.textContent = '激活中...';
+  msg.style.color = '#999'; msg.textContent = '';
+  fetch(API + '/api/auth/activate', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ code: code })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.success){
+      currentAuth = data.auth;
+      msg.style.color = '#51cf66';
+      msg.textContent = '✅ 激活成功！已升级为正式会员';
+      setTimeout(function(){
+        updateUserBoxWithAuth();
+        loadAfterAuth();
+      }, 1000);
+    } else {
+      msg.style.color = '#ff6b6b';
+      msg.textContent = '❌ ' + (data.error || '激活失败');
+    }
+  })
+  .catch(function(){
+    msg.style.color = '#ff6b6b'; msg.textContent = '网络错误,请重试';
+  })
+  .finally(function(){
+    btn.disabled = false;
+    btn.textContent = '激活';
+  });
+}
 
 function loadAfterAuth(){
   loadSettings();
