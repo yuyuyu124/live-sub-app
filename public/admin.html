@@ -61,8 +61,8 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
   </header>
 
   <div id="loginBox" class="card login-box">
-    <p style="margin-bottom:14px;color:var(--ink-2)">请输入你的用户 ID 登录管理后台</p>
-    <input id="adminUserIdInput" type="text" placeholder="用户 ID" autocomplete="off">
+    <p style="margin-bottom:14px;color:var(--ink-2)">请输入管理密码登录后台</p>
+    <input id="adminPwdInput" type="password" placeholder="管理密码" autocomplete="off" style="-webkit-text-security:disc">
     <br>
     <button onclick="adminLogin()">登录</button>
     <div id="loginError" class="error-msg"></div>
@@ -111,7 +111,7 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
 
 <script>
 var API = '';
-var adminUserId = '';
+var adminPwd = '';
 
 function getUserId(){
   try { return localStorage.getItem('live_sub_uid') || adminUserId || ''; }
@@ -119,14 +119,14 @@ function getUserId(){
 }
 
 function apiHeaders(extra){
-  return Object.assign({ 'Content-Type':'application/json', 'X-User-Id': getUserId() }, extra || {});
+  return Object.assign({ 'Content-Type':'application/json', 'X-Admin-Token': adminPwd || '' }, extra || {});
 }
 
 function adminLogin(){
-  var uid = document.getElementById('adminUserIdInput').value.trim();
-  if(!uid){ document.getElementById('loginError').textContent = '请输入用户 ID'; return; }
-  adminUserId = uid;
-  try { localStorage.setItem('live_sub_uid', uid); } catch(e){}
+  var pwd = document.getElementById('adminPwdInput').value;
+  if(!pwd){ document.getElementById('loginError').textContent = '请输入管理密码'; return; }
+  adminPwd = pwd;
+  try { localStorage.setItem('admin_pwd', pwd); } catch(e){}
   checkAdmin();
 }
 
@@ -339,8 +339,10 @@ function deleteCard(code){
 
 // 启动时检查是否已登录
 (function(){
-  var uid = getUserId();
-  if(uid){
+  var savedPwd = '';
+  try { savedPwd = localStorage.getItem('admin_pwd') || ''; } catch(e){}
+  if(savedPwd){
+    adminPwd = savedPwd;
     checkAdmin();
   }
 })();
