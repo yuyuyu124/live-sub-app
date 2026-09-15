@@ -814,7 +814,7 @@ function handleApi(req, res, pathname) {
   // POST /api/invite/claim - 领取邀请奖励
   if (method === 'POST' && parts[1] === 'invite' && parts[2] === 'claim' && parts.length === 3) {
     return readBody(req).then(function (body) {
-      const result = invite.claimReward(body.inviteId, body.rewardType);
+      const result = invite.claimReward(body.inviteId, body.rewardType, body.phone || '', body.payMethod || '');
       return sendJson(res, result.success ? 200 : 400, result);
     });
   }
