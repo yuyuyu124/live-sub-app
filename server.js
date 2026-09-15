@@ -732,8 +732,9 @@ function handleApi(req, res, pathname) {
   // POST /api/trial/start - 启动免费试用(不需要已激活的卡密)
   if (method === 'POST' && parts[1] === 'trial' && parts[2] === 'start' && parts.length === 3) {
     return readBody(req).then(function () {
-      const ip = getClientIp(req);
-      const result = cards.startTrial(userId, ip);
+      const body = req.body || {};
+      const fingerprint = body.fingerprint || '';
+      const result = cards.startTrial(userId, fingerprint);
       if (!result.success) return sendJson(res, 400, result);
       const auth = cards.getUserAuth(userId);
       return sendJson(res, 200, { success: true, auth: auth });
