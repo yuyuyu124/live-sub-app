@@ -5,13 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>管理后台 - 直播订阅</title>
 <style>
-:root{
-  --pink-0:#FFF6F9; --pink-1:#FBE6EE; --pink-2:#F6CDDD;
-  --rose:#FF6B9D; --rose-d:#E8557F; --rose-dd:#D63E6B;
-  --ink:#5a3a4a; --ink-2:#7f5364; --ink-3:#8f5f73;
-  --card:#FFFFFF; --line:#F3D9E5; --green:#6BCB77; --green-d:#3f9e52;
-  --radius:14px;
-}
+:root{--pink-0:#FFF6F9;--pink-1:#FBE6EE;--pink-2:#F6CDDD;--rose:#FF6B9D;--rose-d:#E8557F;--rose-dd:#D63E6B;--ink:#5a3a4a;--ink-2:#7f5364;--ink-3:#8f5f73;--card:#FFFFFF;--line:#F3D9E5;--green:#6BCB77;--green-d:#3f9e52;--radius:14px}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.5;color:var(--ink);background:linear-gradient(180deg,#FFF9FB,#FFF3F7);min-height:100vh}
 .app{max-width:900px;margin:0 auto;padding:16px}
@@ -40,8 +34,7 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
 .badge-rejected{background:#FEE2E2;color:#991B1B}
 .badge-cash_pending{background:#FEF3C7;color:#92400E}
 .badge-cash_paid{background:#D1FAE5;color:#065F46}
-.badge-membership{background:#DBEAFE;color:#1E40AF}
-.tab-row{display:flex;gap:8px;margin-bottom:16px}
+.tab-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .tab-btn{flex:1;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink-2);font-size:14px;font-weight:600;padding:10px;cursor:pointer;transition:all .2s}
 .tab-btn.active{background:var(--rose);color:#fff;border-color:var(--rose)}
 .tab-content{display:none}
@@ -57,12 +50,12 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
 <div class="app">
   <header>
     <h1>管理后台</h1>
-    <div class="sub">直播订阅 · 审核与返现管理</div>
+    <div class="sub">直播订阅 · 审核/返现/卡密/用户管理</div>
   </header>
 
   <div id="loginBox" class="card login-box">
     <p style="margin-bottom:14px;color:var(--ink-2)">请输入管理密码登录后台</p>
-    <input id="adminPwdInput" type="password" placeholder="管理密码" autocomplete="off" style="-webkit-text-security:disc">
+    <input id="adminPwdInput" type="password" placeholder="管理密码" autocomplete="off">
     <br>
     <button onclick="adminLogin()">登录</button>
     <div id="loginError" class="error-msg"></div>
@@ -70,10 +63,10 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
 
   <div id="adminContent" style="display:none">
     <div class="tab-row">
-      <button class="tab-btn active" onclick="switchTab('share')">分享审核</button>
-      <button class="tab-btn" onclick="switchTab('cashback')">返现管理</button>
-      <button class="tab-btn" onclick="switchTab('cards')">卡密管理</button>
-      <button class="tab-btn" onclick="switchTab('users')">用户列表</button>
+      <button class="tab-btn active" data-tab="share">分享审核</button>
+      <button class="tab-btn" data-tab="cashback">返现管理</button>
+      <button class="tab-btn" data-tab="cards">卡密管理</button>
+      <button class="tab-btn" data-tab="users">用户列表</button>
     </div>
 
     <div id="tab-share" class="tab-content active">
@@ -98,7 +91,7 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
           <input id="genDays" type="number" value="30" min="1" placeholder="天数" style="width:80px;padding:10px;border:1px solid var(--line);border-radius:10px">
           <input id="genMaxSubs" type="number" value="5" min="1" placeholder="最大订阅数" style="width:100px;padding:10px;border:1px solid var(--line);border-radius:10px">
           <input id="genRemark" type="text" placeholder="备注" style="flex:1;min-width:120px;padding:10px;border:1px solid var(--line);border-radius:10px">
-          <button class="btn btn-approve" onclick="generateCards()">生成</button>
+          <button class="btn btn-approve" id="genBtn">生成</button>
         </div>
         <div id="genResult"></div>
       </div>
@@ -116,3 +109,270 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
     </div>
   </div>
 </div>
+
+<script>
+var adminPwd = "";
+
+function apiHeaders(extra){
+  return Object.assign({"Content-Type":"application/json","X-Admin-Token":adminPwd||""},extra||{});
+}
+
+// 登录
+document.querySelector(".login-box button").addEventListener("click",adminLogin);
+document.getElementById("adminPwdInput").addEventListener("keydown",function(e){if(e.key==="Enter")adminLogin();});
+
+function adminLogin(){
+  var pwd=document.getElementById("adminPwdInput").value;
+  if(!pwd){document.getElementById("loginError").textContent="请输入管理密码";return;}
+  adminPwd=pwd;
+  try{localStorage.setItem("admin_pwd",pwd);}catch(e){}
+  checkAdmin();
+}
+
+function checkAdmin(){
+  fetch("/api/admin/check",{headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.isAdmin||data.byId){
+        document.getElementById("loginBox").style.display="none";
+        document.getElementById("adminContent").style.display="block";
+        loadShareList();loadCashbackList();loadCardList();loadUserList();
+      }else{
+        document.getElementById("loginError").textContent="密码错误";
+      }
+    })
+    .catch(function(e){document.getElementById("loginError").textContent="网络错误: "+e.message;});
+}
+
+// 标签切换
+document.querySelectorAll(".tab-btn").forEach(function(btn){
+  btn.addEventListener("click",function(){
+    document.querySelectorAll(".tab-btn").forEach(function(b){b.classList.remove("active");});
+    document.querySelectorAll(".tab-content").forEach(function(c){c.classList.remove("active");});
+    btn.classList.add("active");
+    document.getElementById("tab-"+btn.dataset.tab).classList.add("active");
+  });
+});
+
+// ============ 分享审核 ============
+function loadShareList(){
+  fetch("/api/admin/share/pending",{headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var list=data.reviews||data||[];
+      if(!list.length){document.getElementById("shareList").innerHTML='<div class="empty">没有待审核的分享</div>';return;}
+      var html="";
+      list.forEach(function(r){
+        html+='<div class="review-item">';
+        html+='<img src="'+(r.imageUrl||"")+'" loading="lazy" data-src="'+(r.imageUrl||"")+'">';
+        html+='<div class="review-info">用户: <b>'+(r.userId||"").substring(0,12)+'...</b><br>提交时间: '+(r.createdAt||"")+"<br>状态: <span class='badge badge-"+(r.status||"pending")+"'>"+(r.status||"pending")+"</span></div>";
+        html+='<div class="review-actions">';
+        html+='<button class="btn btn-approve" data-act="approve" data-id="'+r.id+'">通过(发7天会员)</button>';
+        html+='<button class="btn btn-reject" data-act="reject" data-id="'+r.id+'">拒绝</button>';
+        html+="</div></div>";
+      });
+      document.getElementById("shareList").innerHTML=html;
+      // 绑定事件
+      document.querySelectorAll("#shareList [data-act]").forEach(function(btn){
+        btn.addEventListener("click",function(){
+          reviewShare(btn.dataset.id,btn.dataset.act==="approve");
+        });
+      });
+      document.querySelectorAll("#shareList img").forEach(function(img){
+        img.addEventListener("click",function(){window.open(img.dataset.src);});
+      });
+    })
+    .catch(function(e){document.getElementById("shareList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
+}
+
+function reviewShare(id,approved){
+  if(!confirm(approved?"确认通过？将发放 7 天会员":"确认拒绝？"))return;
+  fetch("/api/admin/share/review",{method:"POST",headers:apiHeaders(),body:JSON.stringify({id:id,approved:approved})})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.success!==false){alert(approved?"已通过，7 天会员已发放":"已拒绝");loadShareList();}
+      else{alert("操作失败: "+(data.error||""));}
+    })
+    .catch(function(e){alert("网络错误: "+e.message);});
+}
+
+// ============ 返现管理 ============
+function loadCashbackList(){
+  fetch("/api/admin/invites",{headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var list=data.invites||data||[];
+      var pending=list.filter(function(i){return i.rewardStatus==="cash_pending";});
+      if(!pending.length){document.getElementById("cashbackList").innerHTML='<div class="empty">没有待处理的返现</div>';return;}
+      var html="";
+      pending.forEach(function(i){
+        var method=i.cashMethod==="alipay"?"支付宝":i.cashMethod==="wechat"?"微信":(i.cashMethod||"未填");
+        html+='<div class="invite-item"><div class="invite-info">';
+        html+="邀请人: <b>"+(i.inviterId||"").substring(0,12)+"...</b><br>";
+        html+="被邀请人: <b>"+(i.inviteeId||"").substring(0,12)+"...</b><br>";
+        html+="手机号: <b>"+(i.cashPhone||"未填")+"</b><br>";
+        html+="收款方式: <b>"+method+"</b><br>";
+        html+='<span class="badge badge-cash_pending">待打款</span>';
+        html+='</div><div class="review-actions">';
+        html+='<button class="btn btn-paid" data-cash="'+i.id+'">标记已支付</button>';
+        html+="</div></div>";
+      });
+      document.getElementById("cashbackList").innerHTML=html;
+      document.querySelectorAll("#cashbackList [data-cash]").forEach(function(btn){
+        btn.addEventListener("click",function(){markCashPaid(btn.dataset.cash);});
+      });
+    })
+    .catch(function(e){document.getElementById("cashbackList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
+}
+
+function markCashPaid(id){
+  if(!confirm("确认已通过返现支付？"))return;
+  fetch("/api/admin/invites/"+id+"/pay",{method:"POST",headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.success!==false){alert("已标记为已支付");loadCashbackList();}
+      else{alert("操作失败: "+(data.error||""));}
+    })
+    .catch(function(e){alert("网络错误: "+e.message);});
+}
+
+// ============ 卡密管理 ============
+document.getElementById("genBtn").addEventListener("click",generateCards);
+
+function generateCards(){
+  var count=parseInt(document.getElementById("genCount").value)||1;
+  var days=parseInt(document.getElementById("genDays").value)||30;
+  var maxSubs=parseInt(document.getElementById("genMaxSubs").value)||5;
+  var remark=document.getElementById("genRemark").value.trim();
+  fetch("/api/admin/cards",{method:"POST",headers:apiHeaders(),body:JSON.stringify({count:count,days:days,maxLiveSubs:maxSubs,remark:remark})})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.cards){
+        var html='<div style="margin-top:10px;font-size:13px;color:var(--ink-2)">已生成 '+data.cards.length+' 张卡密:</div>';
+        html+='<textarea style="width:100%;margin-top:8px;padding:10px;font-size:12px;border:1px solid var(--line);border-radius:8px;min-height:120px" readonly>';
+        data.cards.forEach(function(c){html+=c+"\n";});
+        html+="</textarea>";
+        document.getElementById("genResult").innerHTML=html;
+        loadCardList();
+      }else{
+        document.getElementById("genResult").innerHTML='<div class="error-msg">'+(data.error||"生成失败")+"</div>";
+      }
+    })
+    .catch(function(e){alert("网络错误: "+e.message);});
+}
+
+function loadCardList(){
+  fetch("/api/admin/cards",{headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var list=data.cards||data||[];
+      if(!list.length){document.getElementById("cardList").innerHTML='<div class="empty">暂无卡密</div>';return;}
+      var html='<div style="max-height:500px;overflow-y:auto">';
+      list.forEach(function(c){
+        var status=c.disabled?'<span class="badge badge-rejected">已停用</span>':c.boundUserId?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
+        var remark=c.remark?' <span style="font-size:11px;color:var(--rose-d);background:var(--pink-1);padding:2px 6px;border-radius:4px">'+c.remark+"</span>":"";
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);gap:8px">';
+        html+='<div style="min-width:0;flex:1">';
+        html+='<div><b style="font-size:13px">'+(c.code||"")+'</b> <span style="font-size:11px;color:var(--ink-3)">'+c.days+"天/"+c.maxLiveSubs+"订阅</span> "+status+remark+"</div>";
+        if(c.boundUserId)html+='<div style="font-size:11px;color:var(--ink-3);margin-top:2px">用户: '+(c.boundUserId||"").substring(0,16)+"... 到期: "+(c.expiresAt||"").substring(0,10)+"</div>";
+        html+="</div>";
+        html+='<div style="display:flex;gap:4px;flex-shrink:0;align-items:center">';
+        html+='<input type="text" value="'+(c.remark||"")+'" placeholder="备注" data-remark="'+c.code+'" style="width:80px;padding:4px 6px;font-size:11px;border:1px solid var(--line);border-radius:6px">';
+        if(!c.disabled&&c.boundUserId)html+='<button class="btn btn-reject" style="font-size:11px;padding:5px 10px" data-disable="'+c.code+'">停用</button>';
+        html+='<button class="btn btn-reject" style="font-size:11px;padding:5px 10px" data-delete="'+c.code+'">删除</button>';
+        html+="</div></div>";
+      });
+      html+="</div>";
+      document.getElementById("cardList").innerHTML=html;
+      // 绑定备注修改
+      document.querySelectorAll("#cardList [data-remark]").forEach(function(inp){
+        inp.addEventListener("change",function(){updateRemark(inp.dataset.remark,inp.value);});
+      });
+      document.querySelectorAll("#cardList [data-disable]").forEach(function(btn){
+        btn.addEventListener("click",function(){disableCard(btn.dataset.disable);});
+      });
+      document.querySelectorAll("#cardList [data-delete]").forEach(function(btn){
+        btn.addEventListener("click",function(){deleteCard(btn.dataset.delete);});
+      });
+    })
+    .catch(function(e){document.getElementById("cardList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
+}
+
+function updateRemark(code,remark){
+  fetch("/api/admin/cards/"+code,{method:"PATCH",headers:apiHeaders(),body:JSON.stringify({remark:remark})})
+    .then(function(r){return r.json();})
+    .then(function(data){if(!data.success)alert("备注保存失败");})
+    .catch(function(e){alert("网络错误: "+e.message);});
+}
+
+function disableCard(code){
+  if(!confirm("确认停用卡密 "+code+"？"))return;
+  fetch("/api/admin/cards/"+code+"/disable",{method:"POST",headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){alert(data.success?"已停用":"失败: "+(data.error||""));loadCardList();})
+    .catch(function(e){alert("网络错误: "+e.message);});
+}
+
+function deleteCard(code){
+  if(!confirm("确认删除卡密 "+code+"？此操作不可撤销"))return;
+  fetch("/api/admin/cards/"+code,{method:"DELETE",headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){alert(data.success?"已删除":"失败: "+(data.error||""));loadCardList();})
+    .catch(function(e){alert("网络错误: "+e.message);});
+}
+
+// ============ 用户列表 ============
+function loadUserList(){
+  fetch("/api/admin/users",{headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var users=data.users||data||[];
+      if(!users.length){document.getElementById("userList").innerHTML='<div class="empty">暂无用户</div>';return;}
+      var html='<div style="max-height:500px;overflow-y:auto">';
+      users.forEach(function(u){
+        var active=u.hasActiveCard?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
+        html+='<div style="padding:10px 0;border-bottom:1px solid var(--line)">';
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">';
+        html+='<div style="min-width:0;flex:1">';
+        html+='<div><b style="font-size:13px">'+(u.userId||"").substring(0,16)+"...</b> "+active+"</div>";
+        html+='<div style="font-size:11px;color:var(--ink-3);margin-top:3px">注册: '+(u.createdAt||"").substring(0,10)+" | 订阅数: "+(u.liveSubsCount||0)+"/"+(u.maxLiveSubs||5)+"</div>";
+        if(u.expiresAt)html+='<div style="font-size:11px;color:var(--ink-3)">到期: '+(u.expiresAt||"").substring(0,10)+"</div>";
+        html+="</div>";
+        html+='<button class="btn btn-approve" style="font-size:11px;padding:5px 10px" data-user="'+u.userId+'">详情</button>';
+        html+="</div></div>";
+      });
+      html+="</div>";
+      document.getElementById("userList").innerHTML=html;
+      document.querySelectorAll("#userList [data-user]").forEach(function(btn){
+        btn.addEventListener("click",function(){viewUser(btn.dataset.user);});
+      });
+    })
+    .catch(function(e){document.getElementById("userList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
+}
+
+function viewUser(uid){
+  fetch("/api/admin/users/"+uid,{headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var u=data.user||data;
+      var subs=u.subscriptions||u.subs||[];
+      var msg="用户: "+(u.userId||"")+"\n";
+      msg+="状态: "+(u.hasActiveCard?"已激活":"未激活")+"\n";
+      msg+="订阅数: "+(u.liveSubsCount||0)+"/"+(u.maxLiveSubs||5)+"\n";
+      if(u.expiresAt)msg+="到期: "+(u.expiresAt||"").substring(0,10)+"\n";
+      if(u.trialFingerprint)msg+="设备指纹: "+(u.trialFingerprint||"")+"\n";
+      if(subs.length){msg+="\n订阅列表:\n";subs.forEach(function(s){msg+="- "+(s.name||s.title||s.platform||"")+" / "+(s.roomId||"")+"\n";});}
+      alert(msg);
+    })
+    .catch(function(e){alert("网络错误: "+e.message);});
+}
+
+// 自动登录
+(function(){
+  var savedPwd="";
+  try{savedPwd=localStorage.getItem("admin_pwd")||"";}catch(e){}
+  if(savedPwd){adminPwd=savedPwd;checkAdmin();}
+})();
+</script>
+</body>
+</html>
