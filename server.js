@@ -20,23 +20,41 @@ const cards = require('./lib/cards');
 const share = require('./lib/share');
 const invite = require('./lib/invite');
 
+// ---- 代理支持(仅在设置了 HTTP_PROXY/HTTPS_PROXY 时启用) ----
+// Node.js 内置 fetch 不读取代理环境变量,需手动设置 undici ProxyAgent
+try {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+  if (proxyUrl) {
+    const { ProxyAgent, setGlobalDispatcher } = require('undici');
+    setGlobalDispatcher(new ProxyAgent(proxyUrl));
+    console.log('[代理] 已启用 HTTP 代理:', proxyUrl);
+  }
+} catch (e) {
+  console.log('[代理] undici 不可用,跳过代理设置:', e.message);
+}
+
 // ---- 配置 ----
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const POLL_INTERVAL = parseInt(process.env.LIVE_POLL_MS || '60000', 10);
 const STAGGER_MS = 2000;
 
 // 管理员 Token（用于管理后台）
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || (function () {
-  const t = crypto.randomBytes(16).toString('hex');
-  console.log('========================================');
-  console.log('⚠️  未设置 ADMIN_TOKEN,已自动生成（重启后会变！）');
-  console.log('   管理后台 Token:', t);
-  console.log('   请在环境变量中设置 ADMIN_TOKEN 以固定 Token');
-  console.log('========================================');
-  return t;
-})();
+// 固定默认密码,避免重启后随机变化导致无法登录
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Aa1863542892_';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+// 抖音反风控:经 Cloudflare Worker 反代,请求从 CF 边缘节点发出
+// 留空则直连抖音(适用于服务器 IP 未被风控的环境)
+const DOUYIN_PROXY = process.env.DOUYIN_PROXY || '';
+
+// 根据是否配置 Worker 代理,构建请求 URL
+function douyinUrl(pathAndQuery) {
+  if (DOUYIN_PROXY) {
+    return DOUYIN_PROXY.replace(/\/$/, '') + pathAndQuery;
+  }
+  return 'https://live.douyin.com' + pathAndQuery;
+}
 
 const WEIBO_POLL_INTERVAL = parseInt(process.env.WEIBO_POLL_MS || '90000', 10);
 let liveTimer = null;
@@ -80,7 +98,7 @@ async function getRealTtwid() {
     return douyinTtwidCache.value;
   }
   try {
-    const resp = await fetch('https://live.douyin.com/', {
+    const resp = await fetch(douyinUrl('/'), {
       headers: {
         'User-Agent': UA,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -118,7 +136,8 @@ async function getRealTtwid() {
 async function douyinGetAPI(roomId) {
   var cookieData = await getRealTtwid();
   var cookie = 'msToken=' + cookieData.msToken + '; ttwid=' + cookieData.ttwid + '; IsDouyinOpen=false; s_v_web_id=verify_' + (cookieData.msToken || '').substring(0, 20);
-  var apiUrl = 'https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;
+  var apiPath = '/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;
+  var apiUrl = douyinUrl(apiPath);
   var headers = {
     'User-Agent': UA,
     'Accept': 'application/json, text/plain, */*',
@@ -146,7 +165,12 @@ async function douyinGetAPI(roomId) {
       var isLive = (status === 2 || status === 1);
       // 有些版本用 status=2 表示直播中，有些用其他值
       var streamUrl = room.stream_url;
-      var hasStream = !!(streamUrl && (streamUrl.live_push_url || streamUrl.rtmp_push_url || streamUrl.push_url));
+      // 抖音 API 返回拉流地址: flv_pull_url / hls_pull_url / rtmp_pull_url
+      // 注意: live_push_url 是推流地址,不能用于判断是否在播
+      var hasStream = !!(streamUrl && (
+        streamUrl.flv_pull_url || streamUrl.hls_pull_url ||
+        streamUrl.rtmp_pull_url || streamUrl.live_push_url
+      ));
       return {
         status: (isLive || hasStream) ? 2 : 0,
         title: room.title || '',
@@ -173,6 +197,10 @@ function genDouyinCookie() {
 }
 
 async function douyinGet(urlStr) {
+  // 把原始抖音 URL 转成请求 URL(直连或经 Worker 反代)
+  var targetUrl;
+  try { targetUrl = new URL(urlStr); } catch (e) { targetUrl = new URL('https://live.douyin.com' + urlStr); }
+  var requestUrl = douyinUrl(targetUrl.pathname + targetUrl.search);
   const headers = {
     'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'zh-CN,zh;q=0.9', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache',
@@ -180,10 +208,10 @@ async function douyinGet(urlStr) {
     'sec-ch-ua': '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="24"',
     'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"Windows"',
     'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'same-origin',
-    'sec-fetch-user': '?1', 'Upgrade-Insecure-Requests': '1', 'Cookie': genDouyinCookie()
+    'sec-fetch-user': '?1', 'Upgrade-Insecure-Requests': '1'
   };
   try {
-    const resp = await fetch(urlStr, { headers: headers, redirect: 'follow' });
+    const resp = await fetch(requestUrl, { headers: headers, redirect: 'follow' });
     const body = await resp.text();
     return { body: body, statusCode: resp.status, finalUrl: resp.url || urlStr };
   } catch (e) { return { body: '', statusCode: 0, finalUrl: urlStr }; }
@@ -264,8 +292,13 @@ function parseDouyinRoom(html) {
     var avatarMatch = seg.match(/"avatar_thumb"\s*:\s*\{[^}]*?"url_list"\s*:\s*\["([^"]+)"/);
     var titleMatch = seg.match(/"title"\s*:\s*"([^"]{0,100})"/);
     if ((lsMatch || nickMatch) && (nickMatch || ridMatch)) {
-      // 在整个 paceFull 中搜索 flv_pull_url(不限 8000 字符范围)
-      var streamUrlMatch = paceFull.indexOf('flv_pull_url') >= 0;
+      // 在整个 paceFull 中搜索流地址(多种字段名兼容)
+      var streamUrlMatch = paceFull.indexOf('flv_pull_url') >= 0
+        || paceFull.indexOf('hls_pull_url') >= 0
+        || paceFull.indexOf('rtmp_pull_url') >= 0
+        || paceFull.indexOf('pull-flv') >= 0
+        || paceFull.indexOf('pull_hls') >= 0;
+      // 注意: 'normal' 是抖音所有房间的默认值,不能作为开播判断条件
       var isLive = lsMatch && (lsMatch[1] === 'live' || lsMatch[1] === 'streaming');
       var hasStream = !!streamUrlMatch;
       return {
@@ -382,14 +415,20 @@ async function checkOneRoom(platform, roomId) {
         return result;
       }
     } else if (platform === 'douyin') {
-      // 优先用 API 接口(绕过网页风控)
-      let room = await douyinGetAPI(roomId);
+      // 优先用网页方式(最可靠,API 经常返回空)
+      let room = null;
+      const pageResp = await douyinGet('https://live.douyin.com/' + roomId);
+      const bodyLen = pageResp.body ? pageResp.body.length : 0;
+      if (pageResp.body && bodyLen > 1000 && pageResp.body.indexOf('验证码') < 0 && pageResp.body.indexOf('验证') < 0) {
+        room = parseDouyinRoom(pageResp.body);
+        console.log('[抖音检测] 网页方式 roomId=' + roomId + ' body=' + bodyLen + ' 解析=' + (room ? JSON.stringify({status: room.status, hasTitle: !!room.title}) : 'null'));
+      } else if (pageResp.body && bodyLen > 0) {
+        console.log('[抖音检测] 疑似风控页 roomId=' + roomId + ' body=' + bodyLen + ' 前200=' + pageResp.body.substring(0, 200));
+      }
+      // 网页失败时回退到 API
       if (!room) {
-        // API 失败,回退到网页方式
-        const pageResp = await douyinGet('https://live.douyin.com/' + roomId);
-        if (pageResp.body && pageResp.body.length > 3000 && pageResp.body.indexOf('验证码') < 0) {
-          room = parseDouyinRoom(pageResp.body);
-        }
+        room = await douyinGetAPI(roomId);
+        if (room) console.log('[抖音检测] API回退 roomId=' + roomId + ' status=' + room.status + ' title=' + (room.title || '').substring(0, 30));
       }
       return {
         liveStatus: (room && room.status === 2) ? 1 : 0,
