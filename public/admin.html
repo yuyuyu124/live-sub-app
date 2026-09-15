@@ -98,7 +98,7 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
       <div class="card">
         <div class="card-title">卡密列表</div>
         <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
-          <select id="cardFilter" style="padding:8px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px">
+          <select id="cardFilter" onchange="loadCardList()" style="padding:8px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px">
             <option value="all">全部</option>
             <option value="active">已激活</option>
             <option value="inactive">未激活</option>
