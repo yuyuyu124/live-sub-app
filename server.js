@@ -382,11 +382,19 @@ async function checkOneRoom(platform, roomId) {
     } else if (platform === 'douyin') {
       // 优先用 API 接口(绕过网页风控)
       let room = await douyinGetAPI(roomId);
-      if (!room) {
+      if (room) {
+        console.log('[抖音检测] API成功 roomId=' + roomId + ' status=' + room.status);
+      } else {
         // API 失败,回退到网页方式
         const pageResp = await douyinGet('https://live.douyin.com/' + roomId);
-        if (pageResp.body && pageResp.body.length > 3000 && pageResp.body.indexOf('验证码') < 0) {
+        const bodyLen = pageResp.body ? pageResp.body.length : 0;
+        const hasVerify = pageResp.body && (pageResp.body.indexOf('验证码') >= 0 || pageResp.body.indexOf('验证') >= 0 || pageResp.body.indexOf('verify') >= 0);
+        console.log('[抖音检测] 网页回退 roomId=' + roomId + ' body=' + bodyLen + ' hasVerify=' + hasVerify);
+        if (pageResp.body && bodyLen > 1000 && !hasVerify) {
           room = parseDouyinRoom(pageResp.body);
+          console.log('[抖音检测] 解析结果=' + (room ? JSON.stringify({status: room.status, hasTitle: !!room.title}) : 'null'));
+        } else if (pageResp.body && bodyLen > 0) {
+          console.log('[抖音检测] 疑似风控页 body前200=' + pageResp.body.substring(0, 200));
         }
       }
       return {
