@@ -602,7 +602,7 @@ function handleApi(req, res, pathname) {
 
   // ===== 管理员 API（需要 X-Admin-Token）=====
   const adminToken = (req.headers['x-admin-token'] || '').trim();
-  const isAdmin = adminToken === ADMIN_TOKEN;
+  const isAdmin = adminToken === ADMIN_TOKEN || cards.isAdmin(getUserId(req));
 
   // GET /api/admin/cards - 卡密列表
   if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'cards' && parts.length === 3) {
