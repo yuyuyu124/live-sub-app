@@ -430,7 +430,7 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
             <option value="xiaohongshu">小红书</option>
           </select>
           <input id="shareAccountInput" type="text" placeholder="填写你的抖音号或小红书号" style="flex:1;min-width:150px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:14px">
-          <button id="shareSubmitBtn" class="btn btn-approve">提交</button>
+          <button id="shareSubmitBtn" class="btn" style="background:linear-gradient(135deg,#FF6B9D,#E8557F);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(232,85,127,.35)">提交</button>
         </div>
         <div id="shareMsg" style="font-size:13px;min-height:18px"></div>
         <div id="shareHistoryBox" style="margin-top:12px"></div></div>
@@ -551,9 +551,9 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
     <p>本服务需激活卡密后使用<br>购买卡密可闲鱼搜索 <b>观铃VV</b> 或搜索小红书号 <b>guanlingV</b> 下单</p>
     <input id="activateInput" type="text" placeholder="请输入卡密，如 LIVE-XXXX-XXXX-XXXX" autocomplete="off">
     <input id="inviteCodeInput" type="text" placeholder="邀请码（选填）" autocomplete="off" style="width:100%;margin-top:8px;padding:12px;font-size:14px;border:1px solid #ddd;border-radius:10px;text-align:center;">
-    <button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;">激活</button>
+    <button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#FF6B9D,#E8557F);color:#fff;cursor:pointer;">激活</button>
     <div style="margin-top:12px;font-size:12px;color:#666;text-align:center">— 或 —</div>
-    <button id="trialBtn" style="width:100%;margin-top:8px;padding:13px;font-size:15px;font-weight:600;border:1.5px solid #667eea;border-radius:10px;background:transparent;color:#667eea;cursor:pointer;">🎉 免费试用 3 天</button>
+    <button id="trialBtn" style="width:100%;margin-top:8px;padding:13px;font-size:15px;font-weight:600;border:1.5px solid #E8557F;border-radius:10px;background:transparent;color:#E8557F;cursor:pointer;">🎉 免费试用 3 天</button>
     <div id="trialHint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">3天试用期间：1 个订阅 + 完整推送。</div>
     <div id="activateMsg" style="margin-top:16px;font-size:13px;min-height:20px;"></div>
   </div>
@@ -1182,7 +1182,7 @@ function updateUserBoxWithAuth(){
       ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,0.1)">' +
         '<input id="trialActivateInput" placeholder="输入正式卡密" style="width:60%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
         '<input id="trialInviteCodeInput" placeholder="邀请码" style="width:35%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
-        '<button id="trialActivateBtn" onclick="activateFromTrial()" style="margin-left:4px;padding:6px 12px;font-size:12px;font-weight:600;border:none;border-radius:6px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;vertical:middle">激活</button>' +
+        '<button id="trialActivateBtn" onclick="activateFromTrial()" style="margin-left:4px;padding:6px 12px;font-size:12px;font-weight:600;border:none;border-radius:6px;background:linear-gradient(135deg,#FF6B9D,#E8557F);color:#fff;cursor:pointer;vertical-align:middle">激活</button>' +
         '<span id="trialActivateMsg" style="display:block;margin-top:4px;font-size:11px;min-height:14px"></span>' +
         '</div>'
       : '';
