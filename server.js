@@ -139,7 +139,12 @@ async function douyinGetAPI(roomId) {
       var isLive = (status === 2 || status === 1);
       // 有些版本用 status=2 表示直播中，有些用其他值
       var streamUrl = room.stream_url;
-      var hasStream = !!(streamUrl && (streamUrl.live_push_url || streamUrl.rtmp_push_url || streamUrl.push_url));
+      // 抖音 API 返回拉流地址: flv_pull_url / hls_pull_url / rtmp_pull_url
+      // 注意: live_push_url 是推流地址,不能用于判断是否在播
+      var hasStream = !!(streamUrl && (
+        streamUrl.flv_pull_url || streamUrl.hls_pull_url ||
+        streamUrl.rtmp_pull_url || streamUrl.live_push_url
+      ));
       return {
         status: (isLive || hasStream) ? 2 : 0,
         title: room.title || '',
