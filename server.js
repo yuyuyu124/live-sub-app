@@ -790,10 +790,11 @@ function handleApi(req, res, pathname) {
   // POST /api/share/upload - 上传分享截图
   if (method === 'POST' && parts[1] === 'share' && parts[2] === 'upload' && parts.length === 3) {
     return readBody(req).then(function (body) {
-      const img = body.image || '';
-      if (!img) return sendJson(res, 400, { success: false, error: '请上传截图' });
+      const platform = body.platform || '';
+      const account = body.account || '';
+      if (!platform || !account) return sendJson(res, 400, { success: false, error: '请选择平台并填写账号' });
       try {
-        const review = share.createReview(userId, img);
+        const review = share.createReview(userId, platform, account);
         return sendJson(res, 200, { success: true, review: review });
       } catch (e) {
         console.error('share upload error:', e.message);
