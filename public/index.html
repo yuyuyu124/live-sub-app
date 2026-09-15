@@ -1062,8 +1062,10 @@ function checkAuth(callback){
           document.getElementById('activateOverlay').style.display = 'none';
           updateUserBoxWithAuth();
           showAnnouncement();
-          // 显示分享和邀请卡片
-          document.getElementById('shareCard').style.display = 'block';
+          // 只有试用用户才显示分享领会员卡片
+          if(currentAuth.cardType === 'trial' || currentAuth.isTrial){
+            document.getElementById('shareCard').style.display = 'block';
+          }
           document.getElementById('inviteCard').style.display = 'block';
           loadShareHistory();
           loadInviteInfo();
@@ -1251,26 +1253,42 @@ function loadAfterAuth(){
 
 // ---- 分享领会员 ----
 var shareImgBase64 = '';
+function compressImage(file, callback){
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var canvas = document.createElement('canvas');
+      var maxW = 1280;
+      var w = img.width, h = img.height;
+      if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      var sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
+      callback(dataUrl, sizeKB);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
 document.addEventListener('DOMContentLoaded', function(){
   var fileInput = document.getElementById('shareFileInput');
   if(fileInput){
     fileInput.addEventListener('change', function(e){
       var file = e.target.files[0];
       if(!file) return;
-      var reader = new FileReader();
-      reader.onload = function(ev){
-        shareImgBase64 = ev.target.result;
+      if(file.size > 10 * 1024 * 1024){ alert('图片不能超过10MB，请选小一点的图'); return; }
+      compressImage(file, function(dataUrl, sizeKB){
+        shareImgBase64 = dataUrl;
         var preview = document.getElementById('sharePreview');
-        var ph = document.getElementById('shareUploadPlaceholder');
-        var area = document.getElementById('shareUploadArea');
-        preview.src = shareImgBase64;
-        preview.style.display = 'block';
-        ph.style.display = 'none';
-        area.classList.add('has-img');
+        if(preview){ preview.innerHTML = '<img src="' + dataUrl + '" style="max-width:200px;border-radius:8px">'; }
+        var sizeHint = document.getElementById('shareSizeHint');
+        if(sizeHint){ sizeHint.textContent = '已压缩到 ' + sizeKB + 'KB'; }
         document.getElementById('shareSubmitBtn').disabled = false;
-      };
-      reader.readAsDataURL(file);
-    });
+      });
+    });    });
   }
   var submitBtn = document.getElementById('shareSubmitBtn');
   if(submitBtn){
