@@ -17,6 +17,8 @@ const store = require('./lib/store');
 const push = require('./lib/push');
 const weibo = require('./lib/weibo');
 const cards = require('./lib/cards');
+const share = require('./lib/share');
+const invite = require('./lib/invite');
 
 // ---- 配置 ----
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -699,7 +701,44 @@ function handleApi(req, res, pathname) {
     });
   }
 
-  // GET /api/whoami  - 返回/生成 userId(前端首次访问用来拿 UUID)
+  // GET /api/admin/share/pending - 待审核的分享
+  if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'share' && parts[3] === 'pending' && parts.length === 4) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    return sendJson(res, 200, { success: true, reviews: share.getPendingReviews() });
+  }
+
+  // POST /api/admin/share/review - 审核分享
+  if (method === 'POST' && parts[1] === 'admin' && parts[2] === 'share' && parts[3] === 'review' && parts.length === 4) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    return readBody(req).then(function (body) {
+      const r = share.reviewShare(body.id, body.approved, body.note);
+      if (!r) return sendJson(res, 404, { success: false, error: '记录不存在' });
+      if (body.approved) cards.grantShareReward(r.userId);
+      return sendJson(res, 200, { success: true });
+    });
+  }
+
+  // GET /api/admin/invites - 所有邀请记录(返现管理)
+  if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'invites' && parts.length === 3) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    return sendJson(res, 200, { success: true, invites: invite.getAllInvites() });
+  }
+
+  // POST /api/admin/invites/:id/pay - 标记返现已支付
+  if (method === 'POST' && parts[1] === 'admin' && parts[2] === 'invites' && parts[4] === 'pay' && parts.length === 5) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    const ok = invite.markCashPaid(parts[3]);
+    return sendJson(res, ok ? 200 : 404, { success: ok });
+  }
+
+  // GET /api/admin/check - 检查当前用户是否是管理员
+  if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'check' && parts.length === 3) {
+    const uid = getUserId(req);
+    const byId = cards.isAdmin(uid);
+    return sendJson(res, 200, { success: true, isAdmin: byId || isAdmin });
+  }
+
+    // GET /api/whoami  - 返回/生成 userId(前端首次访问用来拿 UUID)
   if (method === 'GET' && parts[1] === 'whoami' && parts.length === 2) {
     let uid = userId;
     if (!uid) uid = genUserId();
@@ -724,6 +763,14 @@ function handleApi(req, res, pathname) {
       if (!code) return sendJson(res, 400, { success: false, error: '请输入卡密' });
       const result = cards.activateCard(code, userId);
       if (!result.success) return sendJson(res, 400, result);
+      // 处理邀请码
+      const inviteCode = (body.inviteCode || '').trim();
+      if (inviteCode) {
+        const inviterId = invite.findInviterByCode(inviteCode);
+        if (inviterId && inviterId !== userId) {
+          invite.createInvite(inviterId, userId, code);
+        }
+      }
       const auth = cards.getUserAuth(userId);
       return sendJson(res, 200, { success: true, auth: auth });
     });
@@ -741,7 +788,38 @@ function handleApi(req, res, pathname) {
     });
   }
 
-  // 卡密授权检查（除 auth/status、auth/activate、trial/start 外，所有请求都需要有效卡密）
+  // POST /api/share/upload - 上传分享截图
+  if (method === 'POST' && parts[1] === 'share' && parts[2] === 'upload' && parts.length === 3) {
+    return readBody(req).then(function (body) {
+      const img = body.image || '';
+      if (!img) return sendJson(res, 400, { success: false, error: '请上传截图' });
+      const review = share.createReview(userId, img);
+      return sendJson(res, 200, { success: true, review: review });
+    });
+  }
+
+  // GET /api/share/list - 用户的分享审核记录
+  if (method === 'GET' && parts[1] === 'share' && parts[2] === 'list' && parts.length === 3) {
+    return sendJson(res, 200, { success: true, reviews: share.getUserReviews(userId) });
+  }
+
+  // GET /api/invite/info - 用户邀请码和统计
+  if (method === 'GET' && parts[1] === 'invite' && parts[2] === 'info' && parts.length === 3) {
+    const code = invite.getInviteCode(userId);
+    const myInvites = invite.getUserInvites(userId);
+    const pendingCount = myInvites.filter(function (i) { return i.rewardStatus === 'pending'; }).length;
+    return sendJson(res, 200, { success: true, inviteCode: code, inviteCount: myInvites.length, pendingCount: pendingCount, invites: myInvites });
+  }
+
+  // POST /api/invite/claim - 领取邀请奖励
+  if (method === 'POST' && parts[1] === 'invite' && parts[2] === 'claim' && parts.length === 3) {
+    return readBody(req).then(function (body) {
+      const result = invite.claimReward(body.inviteId, body.rewardType);
+      return sendJson(res, result.success ? 200 : 400, result);
+    });
+  }
+
+  // 卡密授权检查（除 auth/status、auth/activate、trial/start、share、invite 外，所有请求都需要有效卡密）
   const auth = cards.getUserAuth(userId);
   if (!auth.active) {
     // 试用已到期的用户:允许只读 GET /api/subs 查看保留的订阅列表
@@ -961,6 +1039,15 @@ function handleApi(req, res, pathname) {
 
 function handleStatic(req, res, pathname) {
   let filePath = pathname === '/' ? '/index.html' : pathname;
+  if (filePath.startsWith('/uploads/')) {
+    const uploadFull = path.join(__dirname, filePath);
+    fs.readFile(uploadFull, function (err, data) {
+      if (err) { res.writeHead(404); res.end('Not Found'); return; }
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache' });
+      res.end(data);
+    });
+    return;
+  }
   const full = path.join(PUBLIC_DIR, filePath);
   if (!full.startsWith(PUBLIC_DIR)) { res.writeHead(403); res.end(); return; }
   fs.readFile(full, function (err, data) {
@@ -1016,6 +1103,8 @@ function stopWeiboChecker() { if (weiboTimer) { clearInterval(weiboTimer); weibo
 
 store.load();
 cards.load();
+share.load();
+invite.load();
 const server = http.createServer(handleRequest);
 server.listen(PORT, '0.0.0.0', function () {
   console.log('📡 直播订阅服务(多用户版)已启动');
