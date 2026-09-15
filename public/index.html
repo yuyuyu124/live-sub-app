@@ -548,6 +548,7 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
     <p>本服务需激活卡密后使用<br>购买卡密可闲鱼搜索 <b>观铃VV</b> 或搜索小红书号 <b>guanlingV</b> 下单</p>
     <input id="activateInput" type="text" placeholder="请输入卡密，如 LIVE-XXXX-XXXX-XXXX" autocomplete="off">
     <input id="inviteCodeInput" type="text" placeholder="邀请码（选填）" autocomplete="off" style="width:100%;margin-top:8px;padding:12px;font-size:14px;border:1px solid #ddd;border-radius:10px;text-align:center;">
+    <div style="margin-top:6px;font-size:11px;color:#888;line-height:1.5">填写邀请人的邀请码，对方可获 2 元返现或 3 个月会员奖励</div>
     <button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;">激活</button>
     <div style="margin-top:12px;font-size:12px;color:#666;text-align:center">— 或 —</div>
     <button id="trialBtn" style="width:100%;margin-top:8px;padding:13px;font-size:15px;font-weight:600;border:1.5px solid #667eea;border-radius:10px;background:transparent;color:#667eea;cursor:pointer;">🎉 免费试用 3 天</button>
@@ -598,21 +599,23 @@ function getUserId(){
   return uid;
 }
 
-// 生成设备指纹(同设备跨浏览器基本一致)
+// 生成设备指纹(用稳定信号,同设备跨浏览器/无痕一致)
 function getDeviceFingerprint(){
   try{
     var parts=[];
-    // 屏幕参数
+    // 屏幕参数(稳定)
     parts.push('scr:'+screen.width+'x'+screen.height+'x'+screen.colorDepth+'x'+window.devicePixelRatio);
-    // 系统平台
+    // 系统平台(稳定)
     parts.push('plt:'+(navigator.platform||''));
-    // CPU 核数
+    // CPU 核数(稳定)
     parts.push('cpu:'+(navigator.hardwareConcurrency||0));
-    // 内存
+    // 内存(稳定)
     parts.push('mem:'+(navigator.deviceMemory||0));
-    // 时区
+    // 时区(稳定)
     try{ parts.push('tz:'+Intl.DateTimeFormat().resolvedOptions().timeZone); }catch(e){}
-    // WebGL 显卡信息(最稳定的跨浏览器标识)
+    // 语言
+    parts.push('lang:'+(navigator.language||''));
+    // WebGL 显卡信息(最稳定的跨浏览器标识,同显卡=同结果)
     try{
       var c=document.createElement('canvas');
       var gl=c.getContext('webgl')||c.getContext('experimental-webgl');
@@ -623,28 +626,11 @@ function getDeviceFingerprint(){
         }
       }
     }catch(e){}
-    // canvas 指纹
-    try{
-      var c2=document.createElement('canvas');
-      var ctx=c2.getContext('2d');
-      ctx.textBaseline='top';
-      ctx.font='14px Arial';
-      ctx.fillStyle='#f60';
-      ctx.fillRect(125,1,62,20);
-      ctx.fillStyle='#069';
-      ctx.fillText('live-sub',2,15);
-      ctx.fillStyle='rgba(102,204,0,0.7)';
-      ctx.fillText('live-sub',4,17);
-      var url=c2.toDataURL();
-      var h=0;
-      for(var i=0;i<url.length;i++){h=((h<<5)-h+url.charCodeAt(i))|0;}
-      parts.push('cv:'+(h>>>0).toString(16));
-    }catch(e){}
-    // 合并哈希
+    // 合并哈希(不用 canvas,无痕模式下 canvas 会变)
     var raw=parts.join(';');
-    var h2=0;
-    for(var j=0;j<raw.length;j++){h2=((h2<<5)-h2+raw.charCodeAt(j))|0;}
-    return (h2>>>0).toString(16);
+    var h=0;
+    for(var j=0;j<raw.length;j++){h=((h<<5)-h+raw.charCodeAt(j))|0;}
+    return (h>>>0).toString(16);
   }catch(e){
     return 'fp_error';
   }
@@ -1186,6 +1172,7 @@ function updateUserBoxWithAuth(){
       ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,0.1)">' +
         '<input id="trialActivateInput" placeholder="输入正式卡密" style="width:60%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
         '<input id="trialInviteCodeInput" placeholder="邀请码" style="width:35%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
+        '<div style="font-size:10px;color:#888;margin-top:4px">填邀请码，对方得2元或3个月会员</div>' +
         '<button id="trialActivateBtn" onclick="activateFromTrial()" style="margin-left:4px;padding:6px 12px;font-size:12px;font-weight:600;border:none;border-radius:6px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;vertical:middle">激活</button>' +
         '<span id="trialActivateMsg" style="display:block;margin-top:4px;font-size:11px;min-height:14px"></span>' +
         '</div>'
