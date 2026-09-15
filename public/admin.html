@@ -171,9 +171,9 @@ function loadShareList(){
       if(!list.length){document.getElementById("shareList").innerHTML='<div class="empty">没有待审核的分享</div>';return;}
       var html="";
       list.forEach(function(r){
+        var platName = r.platform === 'douyin' ? '抖音' : r.platform === 'xiaohongshu' ? '小红书' : (r.platform || '未填');
         html+='<div class="review-item">';
-        html+='<img src="'+(r.imageUrl||"")+'" loading="lazy" data-src="'+(r.imageUrl||"")+'">';
-        html+='<div class="review-info">用户: <b>'+(r.userId||"").substring(0,12)+'...</b><br>提交时间: '+(r.createdAt||"")+"<br>状态: <span class='badge badge-"+(r.status||"pending")+"'>"+(r.status||"pending")+"</span></div>";
+        html+='<div class="review-info">用户: <b>'+(r.userId||"").substring(0,12)+'</b><br>平台: <b>'+platName+'</b> | 账号: <b>'+(r.account||"")+'</b><br>提交时间: '+(r.createdAt||"").substring(0,16)+"<br>状态: <span class='badge badge-"+(r.status||"pending")+"'>"+(r.status||"pending")+"</span></div>";
         html+='<div class="review-actions">';
         html+='<button class="btn btn-approve" data-act="approve" data-id="'+r.id+'">通过(发7天会员)</button>';
         html+='<button class="btn btn-reject" data-act="reject" data-id="'+r.id+'">拒绝</button>';
@@ -186,9 +186,7 @@ function loadShareList(){
           reviewShare(btn.dataset.id,btn.dataset.act==="approve");
         });
       });
-      document.querySelectorAll("#shareList img").forEach(function(img){
-        img.addEventListener("click",function(){window.open(img.dataset.src);});
-      });
+
     })
     .catch(function(e){document.getElementById("shareList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
 }
