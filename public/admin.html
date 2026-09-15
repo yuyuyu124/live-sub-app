@@ -86,11 +86,25 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
     <div id="tab-cards" class="tab-content">
       <div class="card">
         <div class="card-title">生成卡密</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <input id="genCount" type="number" value="1" min="1" max="100" placeholder="数量" style="width:80px;padding:10px;border:1px solid var(--line);border-radius:10px">
-          <input id="genDays" type="number" value="30" min="1" placeholder="天数" style="width:80px;padding:10px;border:1px solid var(--line);border-radius:10px">
-          <input id="genMaxSubs" type="number" value="5" min="1" placeholder="最大订阅数" style="width:100px;padding:10px;border:1px solid var(--line);border-radius:10px">
-          <input id="genRemark" type="text" placeholder="备注" style="flex:1;min-width:120px;padding:10px;border:1px solid var(--line);border-radius:10px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px">
+          <div>
+            <label style="display:block;font-size:12px;color:var(--ink-3);margin-bottom:4px">生成数量</label>
+            <input id="genCount" type="number" value="1" min="1" max="100" placeholder="数量" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:14px">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--ink-3);margin-bottom:4px">有效天数</label>
+            <input id="genDays" type="number" value="30" min="1" placeholder="天数" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:14px">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--ink-3);margin-bottom:4px">最大订阅数</label>
+            <input id="genMaxSubs" type="number" value="5" min="1" placeholder="最大订阅数" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:14px">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--ink-3);margin-bottom:4px">备注(可选)</label>
+            <input id="genRemark" type="text" placeholder="备注" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:14px">
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
           <button class="btn btn-approve" id="genBtn">生成</button>
         </div>
         <div id="genResult"></div>
