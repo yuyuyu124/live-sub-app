@@ -5,392 +5,345 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>管理后台 - 直播订阅</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f1e; color: #e0e0e0; min-height: 100vh; }
-  .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
-  h1 { font-size: 22px; margin-bottom: 24px; color: #fff; }
-  h2 { font-size: 16px; margin: 32px 0 16px; color: #aaa; border-bottom: 1px solid #2a2a3e; padding-bottom: 8px; }
-  
-  /* 登录 */
-  .login-box { max-width: 360px; margin: 80px auto; background: #1a1a2e; padding: 32px; border-radius: 12px; }
-  .login-box h1 { text-align: center; margin-bottom: 24px; }
-  input, button { font-family: inherit; }
-  .login-box input { width: 100%; padding: 12px 16px; font-size: 14px; border: 1px solid #333; border-radius: 8px; background: #0f0f1e; color: #fff; margin-bottom: 16px; }
-  .btn { padding: 12px 20px; font-size: 14px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
-  .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; width: 100%; }
-  .btn-danger { background: #e74c3c; color: #fff; padding: 6px 12px; font-size: 12px; }
-  .btn-warn { background: #f39c12; color: #fff; padding: 6px 12px; font-size: 12px; }
-  .btn-sm { padding: 6px 12px; font-size: 12px; }
-  
-  /* 生成卡密表单 */
-  .gen-form { background: #1a1a2e; padding: 20px; border-radius: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; align-items: end; }
-  .gen-form label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
-  .gen-form input { width: 100%; padding: 10px 12px; border: 1px solid #333; border-radius: 6px; background: #0f0f1e; color: #fff; font-size: 14px; }
-  
-  /* 表格 */
-  .table-wrap { overflow-x: auto; background: #1a1a2e; border-radius: 12px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; padding: 12px; background: #22223a; color: #888; font-weight: 600; white-space: nowrap; }
-  td { padding: 12px; border-top: 1px solid #2a2a3e; }
-  tr:hover td { background: #1e1e35; }
-  .code { font-family: 'Courier New', monospace; color: #667eea; font-weight: 600; }
-  .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-  .badge-unused { background: #27ae60; color: #fff; }
-  .badge-used { background: #3498db; color: #fff; }
-  .badge-disabled { background: #95a5a6; color: #fff; }
-  .badge-expired { background: #e74c3c; color: #fff; }
-  .muted { color: #666; font-size: 12px; }
-  
-  .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
-  .tab { padding: 8px 16px; background: #1a1a2e; border-radius: 8px; cursor: pointer; font-size: 14px; }
-  .tab.active { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
-  
-  .msg { padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
-  .msg-error { background: #3a1a1a; color: #ff6b6b; }
-  .msg-success { background: #1a3a1a; color: #51cf66; }
-  
-  .header-row { display: flex; justify-content: space-between; align-items: center; }
-  .logout { color: #888; font-size: 13px; cursor: pointer; }
-  .logout:hover { color: #fff; }
+:root{
+  --pink-0:#FFF6F9; --pink-1:#FBE6EE; --pink-2:#F6CDDD;
+  --rose:#FF6B9D; --rose-d:#E8557F; --rose-dd:#D63E6B;
+  --ink:#5a3a4a; --ink-2:#7f5364; --ink-3:#8f5f73;
+  --card:#FFFFFF; --line:#F3D9E5; --green:#6BCB77; --green-d:#3f9e52;
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.5;color:var(--ink);background:linear-gradient(180deg,#FFF9FB,#FFF3F7);min-height:100vh}
+.app{max-width:900px;margin:0 auto;padding:16px}
+header{background:linear-gradient(120deg,#E14E80,#EC6B93);color:#fff;padding:20px 0;text-align:center;border-radius:0 0 18px 18px;box-shadow:0 4px 18px rgba(214,62,107,.28);margin-bottom:20px}
+header h1{font-size:20px;font-weight:700}
+header .sub{font-size:13px;opacity:.9;margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:0 4px 16px rgba(232,85,127,.08)}
+.card-title{font-size:16px;font-weight:700;color:var(--rose-dd);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.empty{text-align:center;color:var(--ink-3);padding:30px 12px;font-size:13px}
+.review-item{background:var(--pink-0);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.review-item img{max-width:200px;max-height:300px;border-radius:8px;cursor:pointer;border:1px solid var(--line)}
+.review-info{font-size:12px;color:var(--ink-2);margin-top:8px;line-height:1.6}
+.review-info b{color:var(--ink)}
+.review-actions{display:flex;gap:8px;margin-top:10px}
+.btn{border:none;border-radius:10px;font-size:13px;font-weight:600;padding:9px 16px;cursor:pointer;min-height:36px;transition:transform .15s}
+.btn:active{transform:scale(.96)}
+.btn-approve{background:linear-gradient(135deg,#6BCB77,#3f9e52);color:#fff}
+.btn-reject{background:linear-gradient(135deg,#FF6B9D,#E8557F);color:#fff}
+.btn-paid{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}
+.invite-item{background:var(--pink-0);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.invite-info{font-size:13px;color:var(--ink-2);line-height:1.8}
+.invite-info b{color:var(--ink)}
+.badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.badge-pending{background:#FEF3C7;color:#92400E}
+.badge-approved{background:#D1FAE5;color:#065F46}
+.badge-rejected{background:#FEE2E2;color:#991B1B}
+.badge-cash_pending{background:#FEF3C7;color:#92400E}
+.badge-cash_paid{background:#D1FAE5;color:#065F46}
+.badge-membership{background:#DBEAFE;color:#1E40AF}
+.tab-row{display:flex;gap:8px;margin-bottom:16px}
+.tab-btn{flex:1;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink-2);font-size:14px;font-weight:600;padding:10px;cursor:pointer;transition:all .2s}
+.tab-btn.active{background:var(--rose);color:#fff;border-color:var(--rose)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.loading{text-align:center;padding:20px;color:var(--ink-3)}
+.login-box{text-align:center;padding:40px 20px}
+.login-box input{width:100%;max-width:300px;padding:12px;font-size:14px;border:1px solid var(--line);border-radius:10px;text-align:center;margin-bottom:10px}
+.login-box button{padding:12px 30px;font-size:14px;border:none;border-radius:10px;background:var(--rose);color:#fff;cursor:pointer}
+.error-msg{color:#dc2626;font-size:13px;margin-top:8px}
 </style>
 </head>
 <body>
-<div class="container">
-  <!-- 登录页 -->
-  <div id="loginView">
-    <div class="login-box">
-      <h1>🔐 管理后台</h1>
-      <input id="tokenInput" type="password" placeholder="请输入管理员 Token" />
-      <button class="btn btn-primary" onclick="doLogin()">登录</button>
-      <div id="loginMsg" style="margin-top:12px;font-size:13px;"></div>
-    </div>
+<div class="app">
+  <header>
+    <h1>管理后台</h1>
+    <div class="sub">直播订阅 · 审核与返现管理</div>
+  </header>
+
+  <div id="loginBox" class="card login-box">
+    <p style="margin-bottom:14px;color:var(--ink-2)">请输入你的用户 ID 登录管理后台</p>
+    <input id="adminUserIdInput" type="text" placeholder="用户 ID" autocomplete="off">
+    <br>
+    <button onclick="adminLogin()">登录</button>
+    <div id="loginError" class="error-msg"></div>
   </div>
 
-  <!-- 管理页 -->
-  <div id="adminView" style="display:none;">
-    <div class="header-row">
-      <h1>📊 管理后台</h1>
-      <span class="logout" onclick="logout()">退出</span>
-    </div>
-    
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('cards')">卡密管理</div>
-      <div class="tab" onclick="switchTab('users')">用户列表</div>
+  <div id="adminContent" style="display:none">
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('share')">分享审核</button>
+      <button class="tab-btn" onclick="switchTab('cashback')">返现管理</button>
+      <button class="tab-btn" onclick="switchTab('cards')">卡密管理</button>
     </div>
 
-    <div id="cardsTab">
-      <h2>生成卡密</h2>
-      <div class="gen-form">
-        <div>
-          <label>数量</label>
-          <input id="genCount" type="number" value="1" min="1" max="100" />
-        </div>
-        <div>
-          <label>有效期(天)</label>
-          <input id="genDays" type="number" value="30" min="1" />
-        </div>
-        <div>
-          <label>最大直播订阅数</label>
-          <input id="genMax" type="number" value="10" min="1" />
-        </div>
-        <div>
-          <label>备注(可选)</label>
-          <input id="genRemark" type="text" placeholder="如：月度卡" />
-        </div>
-        <div>
-          <button class="btn btn-primary" onclick="generateCards()">生成卡密</button>
-        </div>
-      </div>
-      <div id="genMsg"></div>
-
-      <h2>卡密列表</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>卡密</th>
-              <th>状态</th>
-              <th>天数</th>
-              <th>最大订阅</th>
-              <th>绑定用户</th>
-              <th>激活时间</th>
-              <th>过期时间</th>
-              <th>备注</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="cardsTbody"></tbody>
-        </table>
+    <div id="tab-share" class="tab-content active">
+      <div class="card">
+        <div class="card-title">分享截图审核</div>
+        <div id="shareList"><div class="loading">加载中...</div></div>
       </div>
     </div>
 
-    <div id="usersTab" style="display:none;">
-      <h2>用户列表</h2>
-      <div style="margin-bottom:12px;">
-        <input id="userSearch" type="text" placeholder="输入用户 ID 搜索..." oninput="filterUsers()" style="width:280px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>用户 ID</th>
-              <th>卡密</th>
-              <th>状态</th>
-              <th>剩余天数</th>
-              <th>直播订阅</th>
-              <th>推送方式</th>
-              <th>过期时间</th>
-            </tr>
-          </thead>
-          <tbody id="usersTbody"></tbody>
-        </table>
+    <div id="tab-cashback" class="tab-content">
+      <div class="card">
+        <div class="card-title">返现管理</div>
+        <div id="cashbackList"><div class="loading">加载中...</div></div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- 用户详情弹窗 -->
-<div id="userDetailModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;padding:16px;">
-  <div style="background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:85vh;overflow-y:auto;padding:20px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <h3 style="margin:0;">用户订阅详情</h3>
-      <button onclick="closeUserDetail()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;">&times;</button>
+    <div id="tab-cards" class="tab-content">
+      <div class="card">
+        <div class="card-title">生成卡密</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="genCount" type="number" value="1" min="1" max="100" placeholder="数量" style="width:80px;padding:10px;border:1px solid var(--line);border-radius:10px">
+          <input id="genDays" type="number" value="30" min="1" placeholder="天数" style="width:80px;padding:10px;border:1px solid var(--line);border-radius:10px">
+          <input id="genMaxSubs" type="number" value="5" min="1" placeholder="最大订阅数" style="width:100px;padding:10px;border:1px solid var(--line);border-radius:10px">
+          <input id="genRemark" type="text" placeholder="备注" style="flex:1;min-width:120px;padding:10px;border:1px solid var(--line);border-radius:10px">
+          <button class="btn btn-approve" onclick="generateCards()">生成</button>
+        </div>
+        <div id="genResult"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">卡密列表</div>
+        <div id="cardList"><div class="loading">加载中...</div></div>
+      </div>
     </div>
-    <div id="userDetailBody"></div>
   </div>
 </div>
 
 <script>
 var API = '';
-var adminToken = localStorage.getItem('adminToken') || '';
+var adminUserId = '';
 
-function apiHeaders(extra){
-  return Object.assign({ 'Content-Type': 'application/json', 'X-Admin-Token': adminToken }, extra || {});
+function getUserId(){
+  try { return localStorage.getItem('live_sub_uid') || adminUserId || ''; }
+  catch(e) { return adminUserId || ''; }
 }
 
-function doLogin(){
-  var token = document.getElementById('tokenInput').value.trim();
-  if(!token){ document.getElementById('loginMsg').innerHTML = '<div class="msg msg-error">请输入 Token</div>'; return; }
-  adminToken = token;
-  // 用卡密列表接口验证
-  fetch(API + '/api/admin/cards', { headers: apiHeaders() })
+function apiHeaders(extra){
+  return Object.assign({ 'Content-Type':'application/json', 'X-User-Id': getUserId() }, extra || {});
+}
+
+function adminLogin(){
+  var uid = document.getElementById('adminUserIdInput').value.trim();
+  if(!uid){ document.getElementById('loginError').textContent = '请输入用户 ID'; return; }
+  adminUserId = uid;
+  try { localStorage.setItem('live_sub_uid', uid); } catch(e){}
+  checkAdmin();
+}
+
+function checkAdmin(){
+  fetch(API + '/api/admin/check', { headers: apiHeaders() })
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if(data.success){
-        localStorage.setItem('adminToken', adminToken);
-        document.getElementById('loginView').style.display = 'none';
-        document.getElementById('adminView').style.display = 'block';
-        loadCards();
+      if(data.isAdmin || data.byId){
+        document.getElementById('loginBox').style.display = 'none';
+        document.getElementById('adminContent').style.display = 'block';
+        loadShareList();
+        loadCashbackList();
+        loadCardList();
       } else {
-        document.getElementById('loginMsg').innerHTML = '<div class="msg msg-error">Token 无效</div>';
+        document.getElementById('loginError').textContent = '该用户不是管理员';
+        document.getElementById('loginBox').style.display = 'block';
+        document.getElementById('adminContent').style.display = 'none';
       }
     })
-    .catch(function(){
-      document.getElementById('loginMsg').innerHTML = '<div class="msg msg-error">网络错误</div>';
+    .catch(function(e){
+      document.getElementById('loginError').textContent = '网络错误: ' + e.message;
     });
 }
 
-function logout(){
-  localStorage.removeItem('adminToken');
-  adminToken = '';
-  document.getElementById('adminView').style.display = 'none';
-  document.getElementById('loginView').style.display = 'block';
-}
-
 function switchTab(tab){
-  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  document.querySelectorAll('.tab-content').forEach(function(c){ c.classList.remove('active'); });
   event.target.classList.add('active');
-  document.getElementById('cardsTab').style.display = tab === 'cards' ? 'block' : 'none';
-  document.getElementById('usersTab').style.display = tab === 'users' ? 'block' : 'none';
-  if(tab === 'users') loadUsers();
+  document.getElementById('tab-' + tab).classList.add('active');
 }
 
+// ============ 分享审核 ============
+function loadShareList(){
+  fetch(API + '/api/admin/share/pending', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var list = data.reviews || data || [];
+      if(!list.length){
+        document.getElementById('shareList').innerHTML = '<div class="empty">没有待审核的分享</div>';
+        return;
+      }
+      var html = '';
+      list.forEach(function(r){
+        html += '<div class="review-item">';
+        html += '<img src="' + (r.imageUrl || '') + '" onclick="window.open(this.src)" loading="lazy">';
+        html += '<div class="review-info">';
+        html += '用户: <b>' + (r.userId || '').substring(0,12) + '...</b><br>';
+        html += '提交时间: ' + (r.createdAt || '') + '<br>';
+        html += '状态: <span class="badge badge-' + (r.status||'pending') + '">' + (r.status||'pending') + '</span>';
+        html += '</div>';
+        html += '<div class="review-actions">';
+        html += '<button class="btn btn-approve" onclick="reviewShare(\'' + r.id + '\',true)">通过(发7天会员)</button>';
+        html += '<button class="btn btn-reject" onclick="reviewShare(\'' + r.id + '\',false)">拒绝</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      document.getElementById('shareList').innerHTML = html;
+    })
+    .catch(function(e){
+      document.getElementById('shareList').innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>';
+    });
+}
+
+function reviewShare(id, approved){
+  if(!confirm(approved ? '确认通过？将发放 7 天会员' : '确认拒绝？')) return;
+  fetch(API + '/api/admin/share/review', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ id: id, approved: approved })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success !== false){
+        alert(approved ? '已通过，7 天会员已发放' : '已拒绝');
+        loadShareList();
+      } else {
+        alert('操作失败: ' + (data.error || ''));
+      }
+    })
+    .catch(function(e){ alert('网络错误: ' + e.message); });
+}
+
+// ============ 返现管理 ============
+function loadCashbackList(){
+  fetch(API + '/api/admin/invites', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var list = data.invites || data || [];
+      var pending = list.filter(function(i){ return i.rewardStatus === 'cash_pending'; });
+      if(!pending.length){
+        document.getElementById('cashbackList').innerHTML = '<div class="empty">没有待处理的返现</div>';
+        return;
+      }
+      var html = '';
+      pending.forEach(function(i){
+        html += '<div class="invite-item">';
+        html += '<div class="invite-info">';
+        html += '邀请人: <b>' + (i.inviterId || '').substring(0,12) + '...</b><br>';
+        html += '被邀请人: <b>' + (i.inviteeId || '').substring(0,12) + '...</b><br>';
+        html += '手机号: <b>' + (i.cashPhone || '未填') + '</b><br>';
+        html += '收款方式: <b>' + (i.cashMethod === 'alipay' ? '支付宝' : i.cashMethod === 'wechat' ? '微信' : (i.cashMethod||'未填')) + '</b><br>';
+        html += '状态: <span class="badge badge-cash_pending">待打款</span>';
+        html += '</div>';
+        html += '<div class="review-actions">';
+        html += '<button class="btn btn-paid" onclick="markCashPaid(\'' + i.id + '\')">标记已支付</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      document.getElementById('cashbackList').innerHTML = html;
+    })
+    .catch(function(e){
+      document.getElementById('cashbackList').innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>';
+    });
+}
+
+function markCashPaid(id){
+  if(!confirm('确认已通过返现支付？')) return;
+  fetch(API + '/api/admin/invites/' + id + '/pay', {
+    method: 'POST',
+    headers: apiHeaders()
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success !== false){
+        alert('已标记为已支付');
+        loadCashbackList();
+      } else {
+        alert('操作失败: ' + (data.error || ''));
+      }
+    })
+    .catch(function(e){ alert('网络错误: ' + e.message); });
+}
+
+// ============ 卡密管理 ============
 function generateCards(){
-  var count = parseInt(document.getElementById('genCount').value, 10) || 1;
-  var days = parseInt(document.getElementById('genDays').value, 10) || 30;
-  var max = parseInt(document.getElementById('genMax').value, 10) || 10;
+  var count = parseInt(document.getElementById('genCount').value) || 1;
+  var days = parseInt(document.getElementById('genDays').value) || 30;
+  var maxSubs = parseInt(document.getElementById('genMaxSubs').value) || 5;
   var remark = document.getElementById('genRemark').value.trim();
-  
   fetch(API + '/api/admin/cards', {
     method: 'POST',
     headers: apiHeaders(),
-    body: JSON.stringify({ count: count, days: days, maxLiveSubs: max, remark: remark })
+    body: JSON.stringify({ count: count, days: days, maxLiveSubs: maxSubs, remark: remark })
   })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    if(data.success){
-      var html = '<div class="msg msg-success">✅ 成功生成 ' + data.cards.length + ' 张卡密：</div>';
-      html += '<div style="background:#0f0f1e;padding:12px;border-radius:8px;font-family:monospace;font-size:13px;line-height:2;">';
-      data.cards.forEach(function(c){
-        html += '<div><span class="code">' + c.code + '</span> <span class="muted">(' + c.days + '天, 最多' + c.maxLiveSubs + '订阅)</span></div>';
-      });
-      html += '</div>';
-      document.getElementById('genMsg').innerHTML = html;
-      loadCards();
-    } else {
-      document.getElementById('genMsg').innerHTML = '<div class="msg msg-error">' + (data.error || '生成失败') + '</div>';
-    }
-  })
-  .catch(function(){
-    document.getElementById('genMsg').innerHTML = '<div class="msg msg-error">网络错误</div>';
-  });
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.cards){
+        var html = '<div style="margin-top:10px;font-size:13px;color:var(--ink-2)">已生成 ' + data.cards.length + ' 张卡密:</div>';
+        html += '<textarea style="width:100%;margin-top:8px;padding:10px;font-size:12px;border:1px solid var(--line);border-radius:8px;min-height:120px" readonly>';
+        data.cards.forEach(function(c){ html += c + '\n'; });
+        html += '</textarea>';
+        document.getElementById('genResult').innerHTML = html;
+        loadCardList();
+      } else {
+        document.getElementById('genResult').innerHTML = '<div class="error-msg">' + (data.error || '生成失败') + '</div>';
+      }
+    })
+    .catch(function(e){ alert('网络错误: ' + e.message); });
 }
 
-function loadCards(){
+function loadCardList(){
   fetch(API + '/api/admin/cards', { headers: apiHeaders() })
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if(!data.success) return;
-      var tbody = document.getElementById('cardsTbody');
-      if(data.cards.length === 0){
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#666;padding:32px;">暂无卡密</td></tr>';
+      var list = data.cards || data || [];
+      if(!list.length){
+        document.getElementById('cardList').innerHTML = '<div class="empty">暂无卡密</div>';
         return;
       }
-      tbody.innerHTML = data.cards.map(function(c){
-        var statusBadge = '';
-        if(c.status === 'unused') statusBadge = '<span class="badge badge-unused">未使用</span>';
-        else if(c.status === 'used'){
-          var exp = new Date(c.expiresAt).getTime();
-          statusBadge = exp > Date.now() ? '<span class="badge badge-used">已激活</span>' : '<span class="badge badge-expired">已过期</span>';
-        }
-        else if(c.status === 'disabled') statusBadge = '<span class="badge badge-disabled">已停用</span>';
-        
-        var actions = '';
-        if(c.status === 'used'){
-          actions = '<button class="btn btn-warn btn-sm" onclick="disableCard(\'' + c.code + '\')">停用</button>';
-        } else if(c.status === 'unused'){
-          actions = '<button class="btn btn-danger btn-sm" onclick="deleteCard(\'' + c.code + '\')">删除</button>';
-        }
-        
-        var remarkText = (c.remark || '').replace(/"/g, '&quot;');
-        return '<tr>' +
-          '<td class="code">' + c.code + '</td>' +
-          '<td>' + statusBadge + '</td>' +
-          '<td>' + c.days + '天</td>' +
-          '<td>' + c.maxLiveSubs + '</td>' +
-          '<td class="muted">' + (c.boundUserId ? c.boundUserId.substring(0,8) + '...' : '-') + '</td>' +
-          '<td class="muted">' + (c.activatedAt ? new Date(c.activatedAt).toLocaleDateString() : '-') + '</td>' +
-          '<td class="muted">' + (c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : '-') + '</td>' +
-          '<td class="muted" style="cursor:pointer;" onclick="editRemark(\'' + c.code + '\', \'' + remarkText + '\')" title="点击修改备注">' + (c.remark || '<span style="color:#bbb;">点击添加</span>') + '</td>' +
-          '<td>' + actions + '</td>' +
-        '</tr>';
-      }).join('');
+      var html = '<div style="max-height:400px;overflow-y:auto">';
+      list.forEach(function(c){
+        var status = c.disabled ? '<span class="badge badge-rejected">已停用</span>' : c.boundUserId ? '<span class="badge badge-approved">已激活</span>' : '<span class="badge badge-pending">未激活</span>';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)">';
+        html += '<div><b style="font-size:13px">' + (c.code||'') + '</b> <span style="font-size:11px;color:var(--ink-3)">' + c.days + '天/' + c.maxLiveSubs + '订阅</span> ' + status + '</div>';
+        html += '<div style="display:flex;gap:4px">';
+        if(!c.disabled && c.boundUserId) html += '<button class="btn btn-reject" style="font-size:11px;padding:5px 10px" onclick="disableCard(\'' + c.code + '\')">停用</button>';
+        html += '<button class="btn btn-reject" style="font-size:11px;padding:5px 10px" onclick="deleteCard(\'' + c.code + '\')">删除</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      document.getElementById('cardList').innerHTML = html;
+    })
+    .catch(function(e){
+      document.getElementById('cardList').innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>';
     });
 }
 
 function disableCard(code){
-  if(!confirm('确定停用此卡密？停用后该用户将无法继续使用。')) return;
-  fetch(API + '/api/admin/cards/' + encodeURIComponent(code) + '/disable', {
-    method: 'POST', headers: apiHeaders()
+  if(!confirm('确认停用卡密 ' + code + '？')) return;
+  fetch(API + '/api/admin/cards/' + code + '/disable', {
+    method: 'POST',
+    headers: apiHeaders()
   })
-  .then(function(r){ return r.json(); })
-  .then(function(data){ if(data.success) loadCards(); });
+    .then(function(r){ return r.json(); })
+    .then(function(data){ alert(data.success ? '已停用' : ('失败: ' + (data.error||''))); loadCardList(); })
+    .catch(function(e){ alert('网络错误: ' + e.message); });
 }
 
 function deleteCard(code){
-  if(!confirm('确定删除此卡密？')) return;
-  fetch(API + '/api/admin/cards/' + encodeURIComponent(code), {
-    method: 'DELETE', headers: apiHeaders()
+  if(!confirm('确认删除卡密 ' + code + '？此操作不可撤销')) return;
+  fetch(API + '/api/admin/cards/' + code, {
+    method: 'DELETE',
+    headers: apiHeaders()
   })
-  .then(function(r){ return r.json(); })
-  .then(function(data){ if(data.success) loadCards(); });
-}
-
-function editRemark(code, currentRemark){
-  var remark = prompt('修改卡密备注：', currentRemark || '');
-  if(remark === null) return;
-  fetch(API + '/api/admin/cards/' + encodeURIComponent(code), {
-    method: 'PATCH',
-    headers: apiHeaders(),
-    body: JSON.stringify({ remark: remark })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data){ if(data.success) loadCards(); else alert('修改失败'); });
-}
-
-var allUsers = [];
-function loadUsers(){
-  fetch(API + '/api/admin/users', { headers: apiHeaders() })
     .then(function(r){ return r.json(); })
-    .then(function(data){
-      if(!data.success) return;
-      allUsers = data.users;
-      renderUsers(allUsers);
-    });
+    .then(function(data){ alert(data.success ? '已删除' : ('失败: ' + (data.error||''))); loadCardList(); })
+    .catch(function(e){ alert('网络错误: ' + e.message); });
 }
-function filterUsers(){
-  var kw = (document.getElementById('userSearch').value || '').trim().toLowerCase();
-  if(!kw){ renderUsers(allUsers); return; }
-  renderUsers(allUsers.filter(function(u){ return u.userId.toLowerCase().indexOf(kw) >= 0; }));
-}
-function renderUsers(list){
-  var tbody = document.getElementById('usersTbody');
-  if(list.length === 0){
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#666;padding:32px;">暂无用户</td></tr>';
-    return;
+
+// 启动时检查是否已登录
+(function(){
+  var uid = getUserId();
+  if(uid){
+    checkAdmin();
   }
-  tbody.innerHTML = list.map(function(u){
-    var statusBadge = u.active ? '<span class="badge badge-used">正常</span>' : '<span class="badge badge-expired">未激活/过期</span>';
-    return '<tr style="cursor:pointer;" onclick="showUserDetail(\'' + u.userId + '\')">' +
-      '<td class="muted">' + u.userId.substring(0, 12) + '...</td>' +
-      '<td class="code">' + (u.cardCode || '-') + '</td>' +
-      '<td>' + statusBadge + '</td>' +
-      '<td>' + u.daysLeft + '天</td>' +
-      '<td>' + u.liveSubs + '/' + u.maxLiveSubs + '</td>' +
-          '<td>' + (u.pushType || '-') + '</td>' +
-          '<td class="muted">' + (u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : '-') + '</td>' +
-    '</tr>';
-  }).join('');
-}
-
-function showUserDetail(userId){
-  fetch(API + '/api/admin/users/' + userId, { headers: apiHeaders() })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if(!data.success){ alert(data.error || '获取失败'); return; }
-      var u = data.user;
-      var html = '';
-      html += '<div style="margin-bottom:12px;line-height:1.8;">';
-      html += '<div><b>用户 ID:</b> <span class="muted">' + u.userId + '</span></div>';
-      html += '<div><b>卡密:</b> ' + (u.cardCode || '-') + '</div>';
-      html += '<div><b>状态:</b> ' + (u.active ? '正常' : '未激活/过期') + ' &nbsp; <b>剩余:</b> ' + u.daysLeft + '天 &nbsp; <b>过期:</b> ' + (u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : '-') + '</div>';
-      html += '<div><b>推送方式:</b> ' + (u.pushType || '-') + '</div>';
-      html += '</div>';
-
-      html += '<h4 style="margin:12px 0 6px;">直播订阅 (' + u.subs.length + '/' + u.maxLiveSubs + ')</h4>';
-      if(u.subs.length === 0){
-        html += '<div style="color:#999;padding:8px 0;">暂无订阅</div>';
-      } else {
-        html += '<table style="width:100%;font-size:13px;border-collapse:collapse;">';
-        html += '<thead><tr style="background:#f5f5f5;"><th style="text-align:left;padding:6px;">平台</th><th style="text-align:left;padding:6px;">房间号</th><th style="text-align:left;padding:6px;">主播</th><th style="text-align:left;padding:6px;">状态</th></tr></thead><tbody>';
-        u.subs.forEach(function(s){
-          var liveBadge = s.liveStatus === 2 ? '<span style="color:#e74c3c;">直播中</span>' : '<span style="color:#999;">未开播</span>';
-          html += '<tr style="border-bottom:1px solid #eee;">';
-          html += '<td style="padding:6px;">' + (s.platform === 'bilibili' ? 'B站' : '抖音') + '</td>';
-          html += '<td style="padding:6px;">' + s.roomId + '</td>';
-          html += '<td style="padding:6px;">' + (s.uname || '-') + (s.title ? '<br><span style="color:#999;font-size:12px;">' + s.title + '</span>' : '') + '</td>';
-          html += '<td style="padding:6px;">' + liveBadge + '</td>';
-          html += '</tr>';
-        });
-        html += '</tbody></table>';
-      }
-
-      document.getElementById('userDetailBody').innerHTML = html;
-      var modal = document.getElementById('userDetailModal');
-      modal.style.display = 'flex';
-    });
-}
-
-function closeUserDetail(){
-  document.getElementById('userDetailModal').style.display = 'none';
-}
-
-// 自动登录
-if(adminToken){
-  document.getElementById('loginView').style.display = 'none';
-  document.getElementById('adminView').style.display = 'block';
-  loadCards();
-}
+})();
 </script>
 </body>
 </html>
