@@ -110,7 +110,7 @@ async function getRealTtwid() {
 
 async function douyinGetAPI(roomId) {
   var cookieData = await getRealTtwid();
-  var cookie = 'msToken=' + cookieData.msToken + '; ttwid=' + cookieData.ttwid + '; IsDouyinOpen=false; s_v_web_id=verify_' + (cookieData.msToken || '').substring(0, 20);
+  var cookie = 'msToken=' + cookieData.msToken + '; ttwid=' + cookieData.ttwid + '; IsDouyinOpen=false';
   var apiUrl = 'https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;
   var headers = {
     'User-Agent': UA,
@@ -171,6 +171,9 @@ function genDouyinCookie() {
 }
 
 async function douyinGet(urlStr) {
+  // 使用真实 ttwid cookie(从抖音首页获取),不要用随机生成的 verify_ cookie(会触发风控)
+  var cookieData = await getRealTtwid();
+  var cookie = 'msToken=' + cookieData.msToken + '; ttwid=' + cookieData.ttwid + '; IsDouyinOpen=false';
   const headers = {
     'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'zh-CN,zh;q=0.9', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache',
@@ -178,7 +181,7 @@ async function douyinGet(urlStr) {
     'sec-ch-ua': '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="24"',
     'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"Windows"',
     'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'same-origin',
-    'sec-fetch-user': '?1', 'Upgrade-Insecure-Requests': '1', 'Cookie': genDouyinCookie()
+    'sec-fetch-user': '?1', 'Upgrade-Insecure-Requests': '1', 'Cookie': cookie
   };
   try {
     const resp = await fetch(urlStr, { headers: headers, redirect: 'follow' });
