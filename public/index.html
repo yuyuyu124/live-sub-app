@@ -1361,14 +1361,31 @@ function copyInviteCode(){
 }
 
 function claimInvite(inviteId, type){
-  fetch(API + '/api/invite/claim', {
-    method: 'POST',
-    headers: apiHeaders(),
-    body: JSON.stringify({ inviteId: inviteId, rewardType: type })
-  }).then(function(r){ return r.json(); }).then(function(data){
-    alert(data.success ? '✅ ' + data.message : '❌ ' + data.error);
-    if(data.success) loadInviteInfo();
-  });
+  if(type === 'cash'){
+    var phone = prompt('请输入接收返现的手机号:');
+    if(!phone) return;
+    if(!/^1\d{10}$/.test(phone)){ alert('手机号格式不正确'); return; }
+    var payMethod = prompt('请选择返现方式: 输入 1=支付宝, 2=微信');
+    if(payMethod !== '1' && payMethod !== '2'){ alert('请选择有效的返现方式'); return; }
+    var method = payMethod === '1' ? 'alipay' : 'wechat';
+    fetch(API + '/api/invite/claim', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ inviteId: inviteId, rewardType: type, phone: phone, payMethod: method })
+    }).then(function(r){ return r.json(); }).then(function(data){
+      alert(data.success ? '✅ ' + data.message : '❌ ' + data.error);
+      if(data.success) loadInviteInfo();
+    });
+  } else {
+    fetch(API + '/api/invite/claim', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ inviteId: inviteId, rewardType: type })
+    }).then(function(r){ return r.json(); }).then(function(data){
+      alert(data.success ? '✅ ' + data.message : '❌ ' + data.error);
+      if(data.success) loadInviteInfo();
+    });
+  }
 }
 
 // ---- 管理员面板 ----
@@ -1429,7 +1446,8 @@ function loadAdminInviteList(){
       }
       var html = '';
       pending.forEach(function(inv){
-        html += '<div class="row"><span>邀请人: ' + inv.inviterId.substring(0,8) + '... | 2元</span>'
+        var method = inv.cashMethod === 'alipay' ? '支付宝' : '微信';
+        html += '<div class="row"><span>邀请人: ' + inv.inviterId.substring(0,8) + '... | 2元 | ' + method + ' | ' + (inv.cashPhone || '无') + '</span>'
               + '<button class="claim-btn claim-mem" onclick="markCashPaid(\'' + inv.id + '\')">标记已支付</button></div>';
       });
       box.innerHTML = html;
