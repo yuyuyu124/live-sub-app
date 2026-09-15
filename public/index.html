@@ -1267,48 +1267,38 @@ function loadAfterAuth(){
 
 // ---- 分享领会员 ----
 document.addEventListener('DOMContentLoaded', function(){
-  var fileInput = document.getElementById('shareFileInput');
-  if(fileInput){
-    fileInput.addEventListener('change', function(e){
-      var file = e.target.files[0];
-      if(!file) return;
-      if(file.size > 10 * 1024 * 1024){ alert('图片不能超过10MB，请选小一点的图'); return; }
-      compressImage(file, function(dataUrl, sizeKB){
-        shareImgBase64 = dataUrl;
-        var preview = document.getElementById('sharePreview');
-        if(preview){ preview.innerHTML = '<img src="' + dataUrl + '" style="max-width:200px;border-radius:8px">'; }
-        var sizeHint = document.getElementById('shareSizeHint');
-        if(sizeHint){ sizeHint.textContent = '已压缩到 ' + sizeKB + 'KB'; }
-        document.getElementById('shareSubmitBtn').disabled = false;
-      });
-    });
-  }
   var submitBtn = document.getElementById('shareSubmitBtn');
   if(submitBtn){
+    submitBtn.disabled = false;
     submitBtn.addEventListener('click', function(){
-      if(!shareImgBase64){ alert('请先上传截图'); return; }
-      var btn = this;
+      var platform = document.getElementById('sharePlatform').value;
+      var account = document.getElementById('shareAccountInput').value.trim();
       var msg = document.getElementById('shareMsg');
+      if(!platform){ msg.style.color = '#ff6b6b'; msg.textContent = '请选择分享平台'; return; }
+      if(!account){ msg.style.color = '#ff6b6b'; msg.textContent = '请填写账号名'; return; }
+      var btn = this;
       btn.disabled = true; btn.textContent = '提交中...';
       msg.style.color = '#999'; msg.textContent = '';
       fetch(API + '/api/share/upload', {
         method: 'POST',
         headers: apiHeaders(),
-        body: JSON.stringify({ image: shareImgBase64 })
+        body: JSON.stringify({ platform: platform, account: account })
       }).then(function(r){ return r.json(); }).then(function(data){
         if(data.success){
-          msg.style.color = '#51cf66'; msg.textContent = '✅ 已提交,等待审核';
-          shareImgBase64 = '';
-          document.getElementById('sharePreview').style.display = 'none';
-          document.getElementById('shareUploadPlaceholder').style.display = 'block';
-          document.getElementById('shareUploadArea').classList.remove('has-img');
-          fileInput.value = '';
+          msg.style.color = '#51cf66';
+          msg.textContent = '✅ 提交成功！等待管理员审核';
+          document.getElementById('shareAccountInput').value = '';
+          document.getElementById('sharePlatform').value = '';
           loadShareHistory();
         } else {
-          msg.style.color = '#ff6b6b'; msg.textContent = '❌ ' + (data.error || '提交失败');
+          msg.style.color = '#ff6b6b';
+          msg.textContent = '❌ ' + (data.error || '提交失败');
         }
-      }).catch(function(){ msg.style.color = '#ff6b6b'; msg.textContent = '网络错误'; })
-      .finally(function(){ btn.disabled = true; btn.textContent = '提交审核'; });
+      }).catch(function(){
+        msg.style.color = '#ff6b6b'; msg.textContent = '网络错误,请重试';
+      }).finally(function(){
+        btn.disabled = false; btn.textContent = '提交';
+      });
     });
   }
 });
