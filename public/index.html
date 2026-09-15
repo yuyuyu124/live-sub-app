@@ -1063,7 +1063,7 @@ function checkAuth(callback){
           updateUserBoxWithAuth();
           showAnnouncement();
           // 只有试用用户才显示分享领会员卡片
-          if(currentAuth.cardType === 'trial' || currentAuth.isTrial){
+          if(currentAuth.type === 'trial'){
             document.getElementById('shareCard').style.display = 'block';
           }
           document.getElementById('inviteCard').style.display = 'block';
