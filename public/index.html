@@ -1066,6 +1066,12 @@ function checkAuth(callback){
           document.getElementById('activateOverlay').style.display = 'none';
           updateUserBoxWithAuth();
           showAnnouncement();
+          // 显示分享和邀请卡片
+          document.getElementById('shareCard').style.display = 'block';
+          document.getElementById('inviteCard').style.display = 'block';
+          loadShareHistory();
+          loadInviteInfo();
+          checkAdminAndShowPanel();
           if(callback) callback();
         } else if(data.auth.expiredTrial){
           showActivateOverlay();
