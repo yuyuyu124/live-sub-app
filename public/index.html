@@ -433,11 +433,12 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
   <!-- 邀请好友 -->
   <div class="reward-card" id="inviteCard" style="display:none">
     <h3>🎁 邀请好友</h3>
-    <div class="desc">好友用你的邀请码激活正式卡密后，你可选择 <b>2元返现</b> 或 <b>3个月会员</b></div>
+    <div class="desc">把邀请码分享给好友，好友激活正式卡密后，你可自选 <b>2元返现</b> 或 <b>3个月会员</b> 奖励</div>
     <div class="invite-code-box">
       <div style="font-size:12px;color:#92400e;margin-bottom:4px">我的邀请码</div>
       <div class="code" id="myInviteCode">--</div>
       <button class="copy-btn" onclick="copyInviteCode()">复制</button>
+      <button class="copy-btn" onclick="shareInviteCode()" style="margin-left:6px;background:linear-gradient(135deg,#10b981,#059669)">分享</button>
     </div>
     <div class="invite-history" id="inviteHistory"></div>
   </div>
@@ -548,7 +549,6 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
     <p>本服务需激活卡密后使用<br>购买卡密可闲鱼搜索 <b>观铃VV</b> 或搜索小红书号 <b>guanlingV</b> 下单</p>
     <input id="activateInput" type="text" placeholder="请输入卡密，如 LIVE-XXXX-XXXX-XXXX" autocomplete="off">
     <input id="inviteCodeInput" type="text" placeholder="邀请码（选填）" autocomplete="off" style="width:100%;margin-top:8px;padding:12px;font-size:14px;border:1px solid #ddd;border-radius:10px;text-align:center;">
-    <div style="margin-top:6px;font-size:11px;color:#888;line-height:1.5">填写邀请人的邀请码，对方可获 2 元返现或 3 个月会员奖励</div>
     <button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;">激活</button>
     <div style="margin-top:12px;font-size:12px;color:#666;text-align:center">— 或 —</div>
     <button id="trialBtn" style="width:100%;margin-top:8px;padding:13px;font-size:15px;font-weight:600;border:1.5px solid #667eea;border-radius:10px;background:transparent;color:#667eea;cursor:pointer;">🎉 免费试用 3 天</button>
@@ -1178,7 +1178,6 @@ function updateUserBoxWithAuth(){
       ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,0.1)">' +
         '<input id="trialActivateInput" placeholder="输入正式卡密" style="width:60%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
         '<input id="trialInviteCodeInput" placeholder="邀请码" style="width:35%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
-        '<div style="font-size:10px;color:#888;margin-top:4px">填邀请码，对方得2元或3个月会员</div>' +
         '<button id="trialActivateBtn" onclick="activateFromTrial()" style="margin-left:4px;padding:6px 12px;font-size:12px;font-weight:600;border:none;border-radius:6px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;vertical:middle">激活</button>' +
         '<span id="trialActivateMsg" style="display:block;margin-top:4px;font-size:11px;min-height:14px"></span>' +
         '</div>'
