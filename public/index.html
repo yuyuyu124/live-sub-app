@@ -417,9 +417,23 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
   </div>
 
   <!-- 分享领会员 -->
-  <div class="reward-card" id="shareCard" style="display:none">
-    <h3>📢 分享领会员</h3>
-    <div class="desc">分享试用体验到抖音或小红书，上传截图，审核通过即可获得 <b>7天无限制会员</b>！</div>
+  <div class="reward-card" id="shareCard">
+        <div class="card-title">📢 分享领会员</div>
+        <p style="font-size:13px;color:var(--ink-2);margin-bottom:12px;line-height:1.6">
+          把直播订阅提醒分享到抖音或小红书，审核通过后获 <b style="color:var(--rose-d)">7 天会员</b> 奖励！<br>
+          请填写你的分享平台和账号名，管理员会去核实。
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <select id="sharePlatform" style="padding:10px;border:1px solid var(--line);border-radius:10px;font-size:14px;flex:0 0 auto">
+            <option value="">选平台</option>
+            <option value="douyin">抖音</option>
+            <option value="xiaohongshu">小红书</option>
+          </select>
+          <input id="shareAccountInput" type="text" placeholder="填写你的抖音号或小红书号" style="flex:1;min-width:150px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:14px">
+          <button id="shareSubmitBtn" class="btn btn-approve" disabled>提交</button>
+        </div>
+        <div id="shareMsg" style="font-size:13px;min-height:18px"></div>
+        <div id="shareHistoryBox" style="margin-top:12px"></div></div>
     <div class="upload-area" id="shareUploadArea" onclick="document.getElementById('shareFileInput').click()">
       <div id="shareUploadPlaceholder">📷 点击上传截图</div>
       <img id="sharePreview" style="display:none" />
@@ -1252,27 +1266,6 @@ function loadAfterAuth(){
 }
 
 // ---- 分享领会员 ----
-var shareImgBase64 = '';
-function compressImage(file, callback){
-  var reader = new FileReader();
-  reader.onload = function(e){
-    var img = new Image();
-    img.onload = function(){
-      var canvas = document.createElement('canvas');
-      var maxW = 1280;
-      var w = img.width, h = img.height;
-      if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
-      canvas.width = w; canvas.height = h;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-      var sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
-      callback(dataUrl, sizeKB);
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
 document.addEventListener('DOMContentLoaded', function(){
   var fileInput = document.getElementById('shareFileInput');
   if(fileInput){
@@ -1321,23 +1314,23 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 function loadShareHistory(){
-  fetch(API + '/api/share/list', { headers: apiHeaders() })
+  fetch(API + '/api/share/history', { headers: apiHeaders() })
     .then(function(r){ return r.json(); })
     .then(function(data){
-      var box = document.getElementById('shareHistory');
-      if(!box || !data.reviews || data.reviews.length === 0){ box.innerHTML = ''; return; }
-      var html = '<div style="font-weight:600;margin-bottom:6px">我的提交记录:</div>';
-      data.reviews.forEach(function(r){
-        var tag = r.status === 'approved' ? '<span class="status-tag tag-approved">已通过</span>'
-                : r.status === 'rejected' ? '<span class="status-tag tag-rejected">已拒绝</span>'
-                : '<span class="status-tag tag-pending">审核中</span>';
-        html += '<div style="font-size:11px;padding:4px 0">' + tag + ' ' + new Date(r.createdAt).toLocaleString() + '</div>';
+      var list = data.reviews || data || [];
+      var box = document.getElementById('shareHistoryBox');
+      if(!box) return;
+      if(!list.length){ box.innerHTML = ''; return; }
+      var html = '<div style="margin-top:8px;font-size:12px;color:var(--ink-3)">提交记录:</div>';
+      list.forEach(function(r){
+        var platName = r.platform === 'douyin' ? '抖音' : r.platform === 'xiaohongshu' ? '小红书' : (r.platform || '');
+        var statusText = r.status === 'approved' ? '<span style="color:#51cf66">已通过(会员已发放)</span>' : r.status === 'rejected' ? '<span style="color:#ff6b6b">未通过</span>' : '<span style="color:#ffa500">待审核</span>';
+        html += '<div style="padding:6px 0;border-bottom:1px dashed var(--line);font-size:12px">' + platName + ': ' + (r.account||'') + ' - ' + statusText + '</div>';
       });
       box.innerHTML = html;
-    });
-}
-
-// ---- 邀请好友 ----
+    })
+    .catch(function(){});
+  }
 function loadInviteInfo(){
   fetch(API + '/api/invite/info', { headers: apiHeaders() })
     .then(function(r){ return r.json(); })
