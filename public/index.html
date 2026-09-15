@@ -263,6 +263,36 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
 }
 .page-footer .author{margin-top:8px;color:var(--ink-2);font-weight:600}
 
+/* ---------- 分享 & 邀请 ---------- */
+.reward-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.reward-card h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:6px}
+.reward-card .desc{font-size:12px;color:var(--ink-3);line-height:1.6;margin-bottom:12px}
+.reward-card .upload-area{border:2px dashed #ddd;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.2s}
+.reward-card .upload-area:hover{border-color:var(--accent);background:#f8f9ff}
+.reward-card .upload-area.has-img{padding:8px;border-style:solid}
+.reward-card .upload-area img{max-width:100%;border-radius:8px}
+.reward-card .upload-btn{width:100%;margin-top:10px;padding:12px;font-size:14px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;cursor:pointer}
+.reward-card .status-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.tag-pending{background:#fef3c7;color:#92400e}
+.tag-approved{background:#d1fae5;color:#065f46}
+.tag-rejected{background:#fee2e2;color:#991b1b}
+.invite-code-box{background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:10px;padding:14px;text-align:center;margin-bottom:12px}
+.invite-code-box .code{font-size:24px;font-weight:700;letter-spacing:3px;color:#92400e}
+.invite-code-box .copy-btn{margin-top:8px;padding:6px 16px;font-size:12px;border:1px solid #92400e;background:transparent;color:#92400e;border-radius:6px;cursor:pointer}
+.invite-history{font-size:12px;color:var(--ink-3)}
+.invite-history .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.claim-btn{padding:4px 10px;font-size:11px;border:none;border-radius:4px;cursor:pointer;margin-left:6px}
+.claim-cash{background:#dbeafe;color:#1e40af}
+.claim-mem{background:#d1fae5;color:#065f46}
+/* 管理员面板 */
+.admin-panel{background:#fef2f2;border:2px solid #fca5a5;border-radius:14px;padding:16px;margin-bottom:14px}
+.admin-panel h3{margin:0 0 12px;color:#991b1b}
+.admin-review{background:#fff;border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid var(--line)}
+.admin-review img{max-width:200px;border-radius:8px;margin:8px 0}
+.admin-review .actions{display:flex;gap:8px;margin-top:8px}
+.admin-review .btn-pass{padding:8px 16px;background:#10b981;color:#fff;border:none;border-radius:6px;cursor:pointer}
+.admin-review .btn-reject{padding:8px 16px;background:#ef4444;color:#fff;border:none;border-radius:6px;cursor:pointer}
+
 /* ---------- 置顶公告 ---------- */
 .announcement{background:linear-gradient(135deg,#FFF5E6,#FFE8CC);border:1px solid #FFD9A3;border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#8a5a2b;line-height:1.6}
 .announcement .ic{font-size:15px;flex-shrink:0;margin-top:1px}
@@ -384,6 +414,42 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
     <span class="ic">📢</span>
     <span class="txt" id="announcementText"></span>
     <button class="close" id="announcementClose" aria-label="关闭公告">✕</button>
+  </div>
+
+  <!-- 分享领会员 -->
+  <div class="reward-card" id="shareCard" style="display:none">
+    <h3>📢 分享领会员</h3>
+    <div class="desc">分享试用体验到抖音或小红书，上传截图，审核通过即可获得 <b>7天无限制会员</b>！</div>
+    <div class="upload-area" id="shareUploadArea" onclick="document.getElementById('shareFileInput').click()">
+      <div id="shareUploadPlaceholder">📷 点击上传截图</div>
+      <img id="sharePreview" style="display:none" />
+    </div>
+    <input type="file" id="shareFileInput" accept="image/*" style="display:none" />
+    <button class="upload-btn" id="shareSubmitBtn" disabled>提交审核</button>
+    <div id="shareMsg" style="margin-top:8px;font-size:12px;min-height:16px"></div>
+    <div id="shareHistory" style="margin-top:12px"></div>
+  </div>
+
+  <!-- 邀请好友 -->
+  <div class="reward-card" id="inviteCard" style="display:none">
+    <h3>🎁 邀请好友</h3>
+    <div class="desc">好友用你的邀请码激活正式卡密后，你可选择 <b>2元返现</b> 或 <b>3个月会员</b></div>
+    <div class="invite-code-box">
+      <div style="font-size:12px;color:#92400e;margin-bottom:4px">我的邀请码</div>
+      <div class="code" id="myInviteCode">--</div>
+      <button class="copy-btn" onclick="copyInviteCode()">复制</button>
+    </div>
+    <div class="invite-history" id="inviteHistory"></div>
+  </div>
+
+  <!-- 管理员审核面板 -->
+  <div class="admin-panel" id="adminPanel" style="display:none">
+    <h3>🛡️ 管理员审核面板</h3>
+    <div id="adminShareList"></div>
+    <div style="margin-top:16px">
+      <h4 style="margin:0 0 8px;color:#991b1b">💰 返现管理</h4>
+      <div id="adminInviteList"></div>
+    </div>
   </div>
 
   <!-- 添加订阅 -->
@@ -1041,13 +1107,16 @@ function showActivateOverlay(){
 
 function doActivate(){
   var code = document.getElementById('activateInput').value.trim().toUpperCase();
+  var inviteCode = document.getElementById('inviteCodeInput').value.trim();
   var msg = document.getElementById('activateMsg');
   if(!code){ msg.style.color = '#ff6b6b'; msg.textContent = '请输入卡密'; return; }
   msg.style.color = '#999'; msg.textContent = '激活中...';
+  var body = { code: code };
+  if(inviteCode) body.inviteCode = inviteCode;
   fetch(API + '/api/auth/activate', {
     method: 'POST',
     headers: apiHeaders(),
-    body: JSON.stringify({ code: code })
+    body: JSON.stringify(body)
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
@@ -1183,6 +1252,197 @@ function loadAfterAuth(){
   loadPushStatus();
   connectSSE();
   setInterval(function(){ syncSubs(); }, 120000);
+}
+
+// ---- 分享领会员 ----
+var shareImgBase64 = '';
+document.addEventListener('DOMContentLoaded', function(){
+  var fileInput = document.getElementById('shareFileInput');
+  if(fileInput){
+    fileInput.addEventListener('change', function(e){
+      var file = e.target.files[0];
+      if(!file) return;
+      var reader = new FileReader();
+      reader.onload = function(ev){
+        shareImgBase64 = ev.target.result;
+        var preview = document.getElementById('sharePreview');
+        var ph = document.getElementById('shareUploadPlaceholder');
+        var area = document.getElementById('shareUploadArea');
+        preview.src = shareImgBase64;
+        preview.style.display = 'block';
+        ph.style.display = 'none';
+        area.classList.add('has-img');
+        document.getElementById('shareSubmitBtn').disabled = false;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  var submitBtn = document.getElementById('shareSubmitBtn');
+  if(submitBtn){
+    submitBtn.addEventListener('click', function(){
+      if(!shareImgBase64){ alert('请先上传截图'); return; }
+      var btn = this;
+      var msg = document.getElementById('shareMsg');
+      btn.disabled = true; btn.textContent = '提交中...';
+      msg.style.color = '#999'; msg.textContent = '';
+      fetch(API + '/api/share/upload', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ image: shareImgBase64 })
+      }).then(function(r){ return r.json(); }).then(function(data){
+        if(data.success){
+          msg.style.color = '#51cf66'; msg.textContent = '✅ 已提交,等待审核';
+          shareImgBase64 = '';
+          document.getElementById('sharePreview').style.display = 'none';
+          document.getElementById('shareUploadPlaceholder').style.display = 'block';
+          document.getElementById('shareUploadArea').classList.remove('has-img');
+          fileInput.value = '';
+          loadShareHistory();
+        } else {
+          msg.style.color = '#ff6b6b'; msg.textContent = '❌ ' + (data.error || '提交失败');
+        }
+      }).catch(function(){ msg.style.color = '#ff6b6b'; msg.textContent = '网络错误'; })
+      .finally(function(){ btn.disabled = true; btn.textContent = '提交审核'; });
+    });
+  }
+});
+
+function loadShareHistory(){
+  fetch(API + '/api/share/list', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var box = document.getElementById('shareHistory');
+      if(!box || !data.reviews || data.reviews.length === 0){ box.innerHTML = ''; return; }
+      var html = '<div style="font-weight:600;margin-bottom:6px">我的提交记录:</div>';
+      data.reviews.forEach(function(r){
+        var tag = r.status === 'approved' ? '<span class="status-tag tag-approved">已通过</span>'
+                : r.status === 'rejected' ? '<span class="status-tag tag-rejected">已拒绝</span>'
+                : '<span class="status-tag tag-pending">审核中</span>';
+        html += '<div style="font-size:11px;padding:4px 0">' + tag + ' ' + new Date(r.createdAt).toLocaleString() + '</div>';
+      });
+      box.innerHTML = html;
+    });
+}
+
+// ---- 邀请好友 ----
+function loadInviteInfo(){
+  fetch(API + '/api/invite/info', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data.success) return;
+      document.getElementById('myInviteCode').textContent = data.inviteCode;
+      var box = document.getElementById('inviteHistory');
+      if(!data.invites || data.invites.length === 0){
+        box.innerHTML = '<div style="text-align:center;color:var(--ink-3);padding:8px">还没有邀请记录</div>';
+        return;
+      }
+      var html = '<div style="font-weight:600;margin-bottom:6px">邀请记录(' + data.invites.length + '):</div>';
+      data.invites.forEach(function(inv){
+        var status = inv.rewardStatus === 'membership_granted' ? '已领3个月会员'
+                   : inv.rewardStatus === 'cash_pending' ? '返现待支付'
+                   : inv.rewardStatus === 'cash_paid' ? '返现已支付'
+                   : '待领取';
+        var actions = '';
+        if(inv.rewardStatus === 'pending'){
+          actions = '<button class="claim-btn claim-cash" onclick="claimInvite(\'' + inv.id + '\',\'cash\')">2元返现</button>'
+                  + '<button class="claim-btn claim-mem" onclick="claimInvite(\'' + inv.id + '\',\'membership\')">3个月会员</button>';
+        }
+        html += '<div class="row"><span>' + new Date(inv.createdAt).toLocaleDateString() + ' ' + status + '</span><span>' + actions + '</span></div>';
+      });
+      box.innerHTML = html;
+    });
+}
+
+function copyInviteCode(){
+  var code = document.getElementById('myInviteCode').textContent;
+  navigator.clipboard.writeText(code).then(function(){
+    alert('邀请码已复制: ' + code);
+  });
+}
+
+function claimInvite(inviteId, type){
+  fetch(API + '/api/invite/claim', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ inviteId: inviteId, rewardType: type })
+  }).then(function(r){ return r.json(); }).then(function(data){
+    alert(data.success ? '✅ ' + data.message : '❌ ' + data.error);
+    if(data.success) loadInviteInfo();
+  });
+}
+
+// ---- 管理员面板 ----
+function checkAdminAndShowPanel(){
+  fetch(API + '/api/admin/check', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.isAdmin){
+        document.getElementById('adminPanel').style.display = 'block';
+        loadAdminShareList();
+        loadAdminInviteList();
+      }
+    });
+}
+
+function loadAdminShareList(){
+  fetch(API + '/api/admin/share/pending', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var box = document.getElementById('adminShareList');
+      if(!data.reviews || data.reviews.length === 0){
+        box.innerHTML = '<div style="color:#666;font-size:13px">暂无待审核</div>';
+        return;
+      }
+      var html = '<h4 style="margin:0 0 8px;color:#991b1b">待审核分享(' + data.reviews.length + ')</h4>';
+      data.reviews.forEach(function(r){
+        html += '<div class="admin-review">'
+          + '<div style="font-size:12px;color:#666">用户: ' + r.userId.substring(0,8) + '... | ' + new Date(r.createdAt).toLocaleString() + '</div>'
+          + '<img src="' + r.imageUrl + '" />'
+          + '<div class="actions">'
+          + '<button class="btn-pass" onclick="reviewShare(\'' + r.id + '\',true)">通过(发7天会员)</button>'
+          + '<button class="btn-reject" onclick="reviewShare(\'' + r.id + '\',false)">拒绝</button>'
+          + '</div></div>';
+      });
+      box.innerHTML = html;
+    });
+}
+
+function reviewShare(id, approved){
+  fetch(API + '/api/admin/share/review', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ id: id, approved: approved })
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if(data.success){ loadAdminShareList(); }
+  });
+}
+
+function loadAdminInviteList(){
+  fetch(API + '/api/admin/invites', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var box = document.getElementById('adminInviteList');
+      var pending = (data.invites || []).filter(function(i){ return i.rewardStatus === 'cash_pending'; });
+      if(pending.length === 0){
+        box.innerHTML = '<div style="color:#666;font-size:13px">暂无待支付返现</div>';
+        return;
+      }
+      var html = '';
+      pending.forEach(function(inv){
+        html += '<div class="row"><span>邀请人: ' + inv.inviterId.substring(0,8) + '... | 2元</span>'
+              + '<button class="claim-btn claim-mem" onclick="markCashPaid(\'' + inv.id + '\')">标记已支付</button></div>';
+      });
+      box.innerHTML = html;
+    });
+}
+
+function markCashPaid(id){
+  fetch(API + '/api/admin/invites/' + id + '/pay', {
+    method: 'POST',
+    headers: apiHeaders()
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if(data.success) loadAdminInviteList();
+  });
 }
 
 /* ---- 初始化 ---- */
