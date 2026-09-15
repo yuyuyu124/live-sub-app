@@ -88,7 +88,7 @@ async function getRealTtwid() {
       },
       redirect: 'manual'
     });
-    var setCookies = resp.headers.raw()['set-cookie'] || [];
+    var setCookies = (resp.headers.getSetCookie ? resp.headers.getSetCookie() : (resp.headers.raw ? (resp.headers.raw()['set-cookie'] || []) : [resp.headers.get('set-cookie') || '']));
     var ttwid = '';
     var msToken = '';
     for (var i = 0; i < setCookies.length; i++) {
