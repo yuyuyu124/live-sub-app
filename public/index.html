@@ -998,7 +998,7 @@ function connectSSE(){
 }
 
 /* ---- 公告横幅 ---- */
-function showAnnouncement(){var key="announcement_sep20240908";if(localStorage.getItem(key))return;var bar=document.getElementById("announcementBar");if(!bar)return;var now=new Date();var ds=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");var txt=document.getElementById("announcementText");if(txt)txt.textContent="["+ds+"] 今天上午 Server酱 推送出现 bug（DNS 解析问题导致部分开播提醒未送达），现已修复，抱歉给大家带来不便 🙏";bar.style.display="flex";document.getElementById("announcementClose").onclick=function(){bar.style.display="none";localStorage.setItem(key,"1");};}
+function showAnnouncement(){var key="announcement_sep20240908";if(localStorage.getItem(key))return;var bar=document.getElementById("announcementBar");if(!bar)return;var ds="2026-09-11";var txt=document.getElementById("announcementText");if(txt)txt.textContent="["+ds+"] 今天上午 Server酱 推送出现 bug（DNS 解析问题导致部分开播提醒未送达），现已修复，抱歉给大家带来不便 🙏";bar.style.display="flex";document.getElementById("announcementClose").onclick=function(){bar.style.display="none";localStorage.setItem(key,"1");};}
 
 /* ---- 卡密授权 ---- */
 var currentAuth = null;
