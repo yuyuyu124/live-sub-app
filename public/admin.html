@@ -330,13 +330,13 @@ function loadUserList(){
       if(!users.length){document.getElementById("userList").innerHTML='<div class="empty">暂无用户</div>';return;}
       var html='<div style="max-height:500px;overflow-y:auto">';
       users.forEach(function(u){
-        var active=u.hasActiveCard?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
+        var active=u.active?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
         html+='<div style="padding:10px 0;border-bottom:1px solid var(--line)">';
         html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">';
         html+='<div style="min-width:0;flex:1">';
         html+='<div><b style="font-size:13px">'+(u.userId||"").substring(0,16)+"...</b> "+active+"</div>";
-        html+='<div style="font-size:11px;color:var(--ink-3);margin-top:3px">注册: '+(u.createdAt||"").substring(0,10)+" | 订阅数: "+(u.liveSubsCount||0)+"/"+(u.maxLiveSubs||5)+"</div>";
-        if(u.expiresAt)html+='<div style="font-size:11px;color:var(--ink-3)">到期: '+(u.expiresAt||"").substring(0,10)+"</div>";
+        html+='<div style="font-size:11px;color:var(--ink-3);margin-top:3px">卡密: '+(u.cardCode||"无")+" | 订阅: "+(u.liveSubs||0)+"/"+(u.maxLiveSubs||5)+"</div>";
+        if(u.expiresAt)html+='<div style="font-size:11px;color:var(--ink-3)">到期: '+(u.expiresAt||"").substring(0,10)+" | 剩余: "+(u.daysLeft||0)+"天</div>";
         html+="</div>";
         html+='<button class="btn btn-approve" style="font-size:11px;padding:5px 10px" data-user="'+u.userId+'">详情</button>';
         html+="</div></div>";
@@ -357,8 +357,8 @@ function viewUser(uid){
       var u=data.user||data;
       var subs=u.subscriptions||u.subs||[];
       var msg="用户: "+(u.userId||"")+"\n";
-      msg+="状态: "+(u.hasActiveCard?"已激活":"未激活")+"\n";
-      msg+="订阅数: "+(u.liveSubsCount||0)+"/"+(u.maxLiveSubs||5)+"\n";
+      msg+="状态: "+(u.active?"已激活":"未激活")+"\n";
+      msg+="订阅数: "+(u.liveSubs||0)+"/"+(u.maxLiveSubs||5)+"\n";
       if(u.expiresAt)msg+="到期: "+(u.expiresAt||"").substring(0,10)+"\n";
       if(u.trialFingerprint)msg+="设备指纹: "+(u.trialFingerprint||"")+"\n";
       if(subs.length){msg+="\n订阅列表:\n";subs.forEach(function(s){msg+="- "+(s.name||s.title||s.platform||"")+" / "+(s.roomId||"")+"\n";});}
