@@ -792,8 +792,13 @@ function handleApi(req, res, pathname) {
     return readBody(req).then(function (body) {
       const img = body.image || '';
       if (!img) return sendJson(res, 400, { success: false, error: '请上传截图' });
-      const review = share.createReview(userId, img);
-      return sendJson(res, 200, { success: true, review: review });
+      try {
+        const review = share.createReview(userId, img);
+        return sendJson(res, 200, { success: true, review: review });
+      } catch (e) {
+        console.error('share upload error:', e.message);
+        return sendJson(res, 500, { success: false, error: '图片保存失败,请重试' });
+      }
     });
   }
 
