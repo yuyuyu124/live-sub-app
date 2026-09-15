@@ -26,15 +26,8 @@ const POLL_INTERVAL = parseInt(process.env.LIVE_POLL_MS || '60000', 10);
 const STAGGER_MS = 2000;
 
 // 管理员 Token（用于管理后台）
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || (function () {
-  const t = crypto.randomBytes(16).toString('hex');
-  console.log('========================================');
-  console.log('⚠️  未设置 ADMIN_TOKEN,已自动生成（重启后会变！）');
-  console.log('   管理后台 Token:', t);
-  console.log('   请在环境变量中设置 ADMIN_TOKEN 以固定 Token');
-  console.log('========================================');
-  return t;
-})();
+// 固定默认密码,避免重启后随机变化导致无法登录
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Aa1863542892_';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
