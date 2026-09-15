@@ -484,7 +484,7 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
     <button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;">激活</button>
     <div style="margin-top:12px;font-size:12px;color:#666;text-align:center">— 或 —</div>
     <button id="trialBtn" style="width:100%;margin-top:8px;padding:13px;font-size:15px;font-weight:600;border:1.5px solid #667eea;border-radius:10px;background:transparent;color:#667eea;cursor:pointer;">🎉 免费试用 3 天</button>
-    <div id="trialHint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">试用期间:1 个订阅 + 完整推送(同设备仅可试用 1 次)</div>
+    <div id="trialHint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">试用期间:1 个订阅 + 完整推送(同设备仅可试用 1 次,换浏览器也无效)</div>
     <div id="activateMsg" style="margin-top:16px;font-size:13px;min-height:20px;"></div>
   </div>
 </div>
@@ -529,6 +529,58 @@ function getUserId(){
     localStorage.setItem('liveUserId', uid);
   }
   return uid;
+}
+
+// 生成设备指纹(同设备跨浏览器基本一致)
+function getDeviceFingerprint(){
+  try{
+    var parts=[];
+    // 屏幕参数
+    parts.push('scr:'+screen.width+'x'+screen.height+'x'+screen.colorDepth+'x'+window.devicePixelRatio);
+    // 系统平台
+    parts.push('plt:'+(navigator.platform||''));
+    // CPU 核数
+    parts.push('cpu:'+(navigator.hardwareConcurrency||0));
+    // 内存
+    parts.push('mem:'+(navigator.deviceMemory||0));
+    // 时区
+    try{ parts.push('tz:'+Intl.DateTimeFormat().resolvedOptions().timeZone); }catch(e){}
+    // WebGL 显卡信息(最稳定的跨浏览器标识)
+    try{
+      var c=document.createElement('canvas');
+      var gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+      if(gl){
+        var dbg=gl.getExtension('WEBGL_debug_renderer_info');
+        if(dbg){
+          parts.push('gpu:'+gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)+'|'+gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL));
+        }
+      }
+    }catch(e){}
+    // canvas 指纹
+    try{
+      var c2=document.createElement('canvas');
+      var ctx=c2.getContext('2d');
+      ctx.textBaseline='top';
+      ctx.font='14px Arial';
+      ctx.fillStyle='#f60';
+      ctx.fillRect(125,1,62,20);
+      ctx.fillStyle='#069';
+      ctx.fillText('live-sub',2,15);
+      ctx.fillStyle='rgba(102,204,0,0.7)';
+      ctx.fillText('live-sub',4,17);
+      var url=c2.toDataURL();
+      var h=0;
+      for(var i=0;i<url.length;i++){h=((h<<5)-h+url.charCodeAt(i))|0;}
+      parts.push('cv:'+(h>>>0).toString(16));
+    }catch(e){}
+    // 合并哈希
+    var raw=parts.join(';');
+    var h2=0;
+    for(var j=0;j<raw.length;j++){h2=((h2<<5)-h2+raw.charCodeAt(j))|0;}
+    return (h2>>>0).toString(16);
+  }catch(e){
+    return 'fp_error';
+  }
 }
 function apiHeaders(extra){
   return Object.assign({ 'Content-Type':'application/json', 'X-User-Id': getUserId() }, extra || {});
@@ -1022,9 +1074,11 @@ function startTrial(){
   var btn = document.getElementById('trialBtn');
   var msg = document.getElementById('activateMsg');
   btn.disabled = true; btn.textContent = '启动中...';
+  var fp = getDeviceFingerprint();
   fetch(API + '/api/trial/start', {
     method: 'POST',
-    headers: apiHeaders()
+    headers: apiHeaders(),
+    body: JSON.stringify({ fingerprint: fp })
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
