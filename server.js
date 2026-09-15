@@ -73,15 +73,53 @@ async function liveReq(urlStr, options) {
 
 // ============================================================
 // 抖音 API 方式检测(绕过网页风控)
+// 缓存真实 ttwid（2小时过期）
+var douyinTtwidCache = { value: null, expireAt: 0 };
+async function getRealTtwid() {
+  if (douyinTtwidCache.value && Date.now() < douyinTtwidCache.expireAt) {
+    return douyinTtwidCache.value;
+  }
+  try {
+    const resp = await fetch('https://live.douyin.com/', {
+      headers: {
+        'User-Agent': UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9'
+      },
+      redirect: 'manual'
+    });
+    var setCookies = resp.headers.raw()['set-cookie'] || [];
+    var ttwid = '';
+    var msToken = '';
+    for (var i = 0; i < setCookies.length; i++) {
+      var c = setCookies[i];
+      if (c.indexOf('ttwid=') >= 0) {
+        var m = c.match(/ttwid=([^;]+)/);
+        if (m) ttwid = m[1];
+      }
+      if (c.indexOf('msToken=') >= 0) {
+        var m2 = c.match(/msToken=([^;]+)/);
+        if (m2) msToken = m2[1];
+      }
+    }
+    if (ttwid) {
+      douyinTtwidCache.value = { ttwid: ttwid, msToken: msToken };
+      douyinTtwidCache.expireAt = Date.now() + 7200000;
+      return douyinTtwidCache.value;
+    }
+  } catch (e) {}
+  // 回退到随机生成
+  return {
+    ttwid: '1%7C' + Date.now() + '%7C1%7C0%7C1%7C' + Math.random().toString(36).substring(2, 18),
+    msToken: Math.random().toString(36).substring(2, 34)
+  };
+}
+
 async function douyinGetAPI(roomId) {
-  const now = Math.floor(Date.now() / 1000);
-  const msToken = Math.random().toString(36).substring(2, 34);
-  const ttwid = '1%7C' + Date.now() + '%7C1%7C0%7C1%7C' + Math.random().toString(36).substring(2, 18);
-  const cookie = 'msToken=' + msToken + '; ttwid=' + ttwid + '; IsDouyinOpen=false; s_v_web_id=verify_' + msToken.substring(0, 20);
-  
-  // 用 API 接口获取直播状态
-  const apiUrl = 'https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;
-  const headers = {
+  var cookieData = await getRealTtwid();
+  var cookie = 'msToken=' + cookieData.msToken + '; ttwid=' + cookieData.ttwid + '; IsDouyinOpen=false; s_v_web_id=verify_' + (cookieData.msToken || '').substring(0, 20);
+  var apiUrl = 'https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;
+  var headers = {
     'User-Agent': UA,
     'Accept': 'application/json, text/plain, */*',
     'Accept-Language': 'zh-CN,zh;q=0.9',
@@ -95,32 +133,35 @@ async function douyinGetAPI(roomId) {
     'sec-fetch-site': 'same-origin'
   };
   try {
-    const resp = await fetch(apiUrl, { headers: headers, redirect: 'follow' });
-    const body = await resp.text();
-    const data = JSON.parse(body);
-    if (data && data.data && data.data.room) {
-      const room = data.data.room;
-      const status = (room.status === 2) ? 2 : 0;
-      const title = (room.title) || '';
-      const nickname = (data.data.user && data.data.user.nickname) || (room.nickname) || '';
-      const avatar = (data.data.user && data.data.user.avatar_thumb && data.data.user.avatar_thumb.url_list && data.data.user.avatar_thumb.url_list[0]) || '';
-      const streamUrl = room.stream_url;
-      const hasStream = !!(streamUrl && streamUrl.live_push_url);
+    var resp = await fetch(apiUrl, { headers: headers, redirect: 'follow' });
+    var body = await resp.text();
+    var data = JSON.parse(body);
+    // 检查多种可能的响应格式
+    var room = null;
+    if (data && data.data) {
+      room = data.data.room || (data.data[0] && data.data[0].room) || null;
+    }
+    if (room) {
+      var status = room.status;
+      var isLive = (status === 2 || status === 1);
+      // 有些版本用 status=2 表示直播中，有些用其他值
+      var streamUrl = room.stream_url;
+      var hasStream = !!(streamUrl && (streamUrl.live_push_url || streamUrl.rtmp_push_url || streamUrl.push_url));
       return {
-        status: (status === 2 || hasStream) ? 2 : 0,
-        title: title,
-        nickname: nickname,
-        avatar: avatar,
+        status: (isLive || hasStream) ? 2 : 0,
+        title: room.title || '',
+        nickname: (data.data.user && data.data.user.nickname) || room.nickname || '',
+        avatar: (data.data.user && data.data.user.avatar_thumb && data.data.user.avatar_thumb.url_list && data.data.user.avatar_thumb.url_list[0]) || '',
         web_rid: roomId
       };
     }
+    console.log('[抖音] API 无 room 数据, body 前200:', body.substring(0, 200));
     return null;
   } catch (e) {
-    // API 失败,回退到网页方式
+    console.log('[抖音] API 异常:', e.message);
     return null;
   }
 }
-
 // 抖音反风控 Cookie
 // ============================================================
 function genDouyinCookie() {
