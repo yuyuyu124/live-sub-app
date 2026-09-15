@@ -547,6 +547,7 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
     <h2 id="activateTitle">请输入卡密激活</h2>
     <p>本服务需激活卡密后使用<br>购买卡密可闲鱼搜索 <b>观铃VV</b> 或搜索小红书号 <b>guanlingV</b> 下单</p>
     <input id="activateInput" type="text" placeholder="请输入卡密，如 LIVE-XXXX-XXXX-XXXX" autocomplete="off">
+    <input id="inviteCodeInput" type="text" placeholder="邀请码（选填）" autocomplete="off" style="width:100%;margin-top:8px;padding:12px;font-size:14px;border:1px solid #ddd;border-radius:10px;text-align:center;">
     <button id="activateBtn" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;">激活</button>
     <div style="margin-top:12px;font-size:12px;color:#666;text-align:center">— 或 —</div>
     <button id="trialBtn" style="width:100%;margin-top:8px;padding:13px;font-size:15px;font-weight:600;border:1.5px solid #667eea;border-radius:10px;background:transparent;color:#667eea;cursor:pointer;">🎉 免费试用 3 天</button>
@@ -1184,6 +1185,7 @@ function updateUserBoxWithAuth(){
     var trialActivateHtml = currentAuth.type === 'trial'
       ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,0.1)">' +
         '<input id="trialActivateInput" placeholder="输入正式卡密" style="width:60%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
+        '<input id="trialInviteCodeInput" placeholder="邀请码" style="width:35%;padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:6px;vertical-align:middle" />' +
         '<button id="trialActivateBtn" onclick="activateFromTrial()" style="margin-left:4px;padding:6px 12px;font-size:12px;font-weight:600;border:none;border-radius:6px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;vertical:middle">激活</button>' +
         '<span id="trialActivateMsg" style="display:block;margin-top:4px;font-size:11px;min-height:14px"></span>' +
         '</div>'
@@ -1213,13 +1215,18 @@ function activateFromTrial(){
   var msg = document.getElementById('trialActivateMsg');
   if(!input || !btn) return;
   var code = input.value.trim().toUpperCase();
+  var inviteCode = '';
+  var inviteInput = document.getElementById('trialInviteCodeInput');
+  if(inviteInput) inviteCode = inviteInput.value.trim();
   if(!code){ msg.style.color = '#ff6b6b'; msg.textContent = '请输入卡密'; return; }
   btn.disabled = true; btn.textContent = '激活中...';
   msg.style.color = '#999'; msg.textContent = '';
+  var body = { code: code };
+  if(inviteCode) body.inviteCode = inviteCode;
   fetch(API + '/api/auth/activate', {
     method: 'POST',
     headers: apiHeaders(),
-    body: JSON.stringify({ code: code })
+    body: JSON.stringify(body)
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
