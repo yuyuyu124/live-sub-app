@@ -1359,6 +1359,24 @@ function copyInviteCode(){
   });
 }
 
+function shareInviteCode(){
+  var code = document.getElementById('myInviteCode').textContent;
+  if(code === '--'){ alert('邀请码加载中,请稍候'); return; }
+  var text = '我在用直播订阅提醒，输入我的邀请码 ' + code + ' 激活，你也来试试吧！';
+  if(navigator.share){
+    navigator.share({ title: '直播订阅', text: text }).catch(function(){});
+  } else {
+    navigator.clipboard.writeText(text).then(function(){
+      alert('邀请文案已复制,快去粘贴分享吧！');
+    }).catch(function(){
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      alert('邀请文案已复制,快去粘贴分享吧！');
+    });
+  }
+}
+
 function claimInvite(inviteId, type){
   if(type === 'cash'){
     var phone = prompt('请输入接收返现的手机号:');
