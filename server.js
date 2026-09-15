@@ -31,6 +31,14 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Aa1863542892_';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
+// 抖音反风控:经 Cloudflare Worker 反代,请求从 CF 边缘节点发出
+// 留空则直连抖音(服务器 IP 未被风控时可用)
+const DOUYIN_PROXY = process.env.DOUYIN_PROXY || '';
+function douyinUrl(pathAndQuery) {
+  if (DOUYIN_PROXY) return DOUYIN_PROXY.replace(/\/$/, '') + pathAndQuery;
+  return 'https://live.douyin.com' + pathAndQuery;
+}
+
 const WEIBO_POLL_INTERVAL = parseInt(process.env.WEIBO_POLL_MS || '90000', 10);
 let liveTimer = null;
 let liveFirstCheck = true;
@@ -73,7 +81,7 @@ async function getRealTtwid() {
     return douyinTtwidCache.value;
   }
   try {
-    const resp = await fetch('https://live.douyin.com/', {
+    const resp = await fetch(douyinUrl('/'), {
       headers: {
         'User-Agent': UA,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -111,7 +119,8 @@ async function getRealTtwid() {
 async function douyinGetAPI(roomId) {
   var cookieData = await getRealTtwid();
   var cookie = 'msToken=' + cookieData.msToken + '; ttwid=' + cookieData.ttwid + '; IsDouyinOpen=false';
-  var apiUrl = 'https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;
+  var apiPath = '/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;
+  var apiUrl = douyinUrl(apiPath);
   var headers = {
     'User-Agent': UA,
     'Accept': 'application/json, text/plain, */*',
@@ -171,6 +180,10 @@ function genDouyinCookie() {
 }
 
 async function douyinGet(urlStr) {
+  // 把原始抖音 URL 转成请求 URL(直连或经 Worker 反代)
+  var targetUrl;
+  try { targetUrl = new URL(urlStr); } catch (e) { targetUrl = new URL('https://live.douyin.com' + urlStr); }
+  var requestUrl = douyinUrl(targetUrl.pathname + targetUrl.search);
   // 使用真实 ttwid cookie(从抖音首页获取),不要用随机生成的 verify_ cookie(会触发风控)
   var cookieData = await getRealTtwid();
   var cookie = 'msToken=' + cookieData.msToken + '; ttwid=' + cookieData.ttwid + '; IsDouyinOpen=false';
@@ -184,7 +197,7 @@ async function douyinGet(urlStr) {
     'sec-fetch-user': '?1', 'Upgrade-Insecure-Requests': '1', 'Cookie': cookie
   };
   try {
-    const resp = await fetch(urlStr, { headers: headers, redirect: 'follow' });
+    const resp = await fetch(requestUrl, { headers: headers, redirect: 'follow' });
     const body = await resp.text();
     return { body: body, statusCode: resp.status, finalUrl: resp.url || urlStr };
   } catch (e) { return { body: '', statusCode: 0, finalUrl: urlStr }; }
