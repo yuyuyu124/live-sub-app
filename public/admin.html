@@ -274,17 +274,20 @@ function loadCardList(){
       var list=data.cards||data||[];
       if(!list.length){document.getElementById("cardList").innerHTML='<div class="empty">暂无卡密</div>';return;}
       var html='<div style="max-height:500px;overflow-y:auto">';
+      var now = new Date();
+      function isExpired(c){ return c.expiresAt && new Date(c.expiresAt) < now; }
+      function isDisabled(c){ return c.disabled || c.status === 'disabled' || isExpired(c); }
       var filter = document.getElementById('cardFilter') ? document.getElementById('cardFilter').value : 'all';
       var filtered = list.filter(function(c){
         if(filter === 'all') return true;
-        if(filter === 'active') return !c.disabled && c.boundUserId;
-        if(filter === 'inactive') return !c.disabled && !c.boundUserId;
-        if(filter === 'disabled') return c.disabled;
+        if(filter === 'active') return !isDisabled(c) && c.boundUserId;
+        if(filter === 'inactive') return !isDisabled(c) && !c.boundUserId;
+        if(filter === 'disabled') return isDisabled(c);
         return true;
       });
       if(!filtered.length){document.getElementById('cardList').innerHTML='<div class="empty">没有符合条件的卡密</div>';return;}
       filtered.forEach(function(c){
-        var status=c.disabled?'<span class="badge badge-rejected">已停用</span>':c.boundUserId?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
+        var status=c.disabled?'<span class="badge badge-rejected">已停用</span>':isExpired(c)?'<span class="badge badge-rejected">已到期</span>':c.boundUserId?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
         var remark=c.remark?' <span style="font-size:11px;color:var(--rose-d);background:var(--pink-1);padding:2px 6px;border-radius:4px">'+c.remark+"</span>":"";
         html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);gap:8px">';
         html+='<div style="min-width:0;flex:1">';
