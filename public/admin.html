@@ -371,6 +371,11 @@ function loadUserList(){
         html+='<div style="min-width:0;flex:1">';
         html+='<div><b style="font-size:13px">'+(u.userId||"").substring(0,16)+"...</b> "+active+"</div>";
         html+='<div style="font-size:11px;color:var(--ink-3);margin-top:3px">卡密: '+(u.cardCode||"无")+" | 订阅: "+(u.liveSubs||0)+"/"+(u.maxLiveSubs||5)+"</div>";
+        // 推送渠道
+        var pushMap = {serverchan:'Server酱(微信)',pushplus:'PushPlus(微信)',bark:'Bark(iOS)',wecom:'企业微信',dingtalk:'钉钉',telegram:'Telegram',email:'邮件'};
+        var pushName = pushMap[u.pushType] || u.pushType || '';
+        var pushBadge = pushName ? '<span style="font-size:10px;background:#D1FAE5;color:#065F46;padding:2px 6px;border-radius:4px">推送: '+pushName+'</span>' : '<span style="font-size:10px;background:var(--pink-1);color:var(--ink-3);padding:2px 6px;border-radius:4px">推送: 未配置</span>';
+        html+='<div style="margin-top:4px">'+pushBadge+'</div>';
         if(u.expiresAt)html+='<div style="font-size:11px;color:var(--ink-3)">到期: '+(u.expiresAt||"").substring(0,10)+" | 剩余: "+(u.daysLeft||0)+"天</div>";
         // 配置渠道
         var liveSubs = u.subs || [];
