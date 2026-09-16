@@ -372,6 +372,22 @@ function loadUserList(){
         html+='<div><b style="font-size:13px">'+(u.userId||"").substring(0,16)+"...</b> "+active+"</div>";
         html+='<div style="font-size:11px;color:var(--ink-3);margin-top:3px">卡密: '+(u.cardCode||"无")+" | 订阅: "+(u.liveSubs||0)+"/"+(u.maxLiveSubs||5)+"</div>";
         if(u.expiresAt)html+='<div style="font-size:11px;color:var(--ink-3)">到期: '+(u.expiresAt||"").substring(0,10)+" | 剩余: "+(u.daysLeft||0)+"天</div>";
+        // 配置渠道
+        var liveSubs = u.subs || [];
+        var wbSubs = u.weiboSubList || [];
+        if(liveSubs.length || wbSubs.length){
+          html+='<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">';
+          liveSubs.forEach(function(s){
+            var plat = s.platform === 'douyin' ? '抖音' : s.platform === 'bilibili' ? 'B站' : (s.platform || '直播');
+            var label = s.uname || s.title || s.roomId || '';
+            html+='<span style="font-size:10px;background:var(--pink-1);color:var(--rose-d);padding:2px 6px;border-radius:4px">'+plat+': '+label+'</span>';
+          });
+          wbSubs.forEach(function(s){
+            var label = s.name || s.uid || '';
+            html+='<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:2px 6px;border-radius:4px">微博: '+label+'</span>';
+          });
+          html+="</div>";
+        }
         html+="</div>";
         html+='<button class="btn btn-approve" style="font-size:11px;padding:5px 10px" data-user="'+u.userId+'">详情</button>';
         html+="</div></div>";
