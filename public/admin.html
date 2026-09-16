@@ -306,7 +306,7 @@ function loadCardList(){
         html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);gap:8px">';
         html+='<div style="min-width:0;flex:1">';
         html+='<div><b style="font-size:13px">'+(c.code||"")+'</b> <span style="font-size:11px;color:var(--ink-3)">'+c.days+"天/"+c.maxLiveSubs+"订阅</span> "+status+remark+"</div>";
-        if(c.boundUserId)html+='<div style="font-size:11px;color:var(--ink-3);margin-top:2px">用户: '+(c.boundUserId||"").substring(0,16)+"... 到期: "+(c.expiresAt||"").substring(0,10)+"</div>";
+        if(c.boundUserId)html+='<div style="font-size:11px;color:var(--ink-3);margin-top:2px">用户: <span data-jump-user="'+c.boundUserId+'" style="color:var(--rose-d);cursor:pointer;text-decoration:underline">'+(c.boundUserId||"").substring(0,16)+"...</span> 到期: "+(c.expiresAt||"").substring(0,10)+"</div>";
         html+="</div>";
         html+='<div style="display:flex;gap:4px;flex-shrink:0;align-items:center">';
         html+='<input type="text" value="'+(c.remark||"")+'" placeholder="备注" data-remark="'+c.code+'" style="width:80px;padding:4px 6px;font-size:11px;border:1px solid var(--line);border-radius:6px">';
@@ -325,6 +325,9 @@ function loadCardList(){
       });
       document.querySelectorAll("#cardList [data-delete]").forEach(function(btn){
         btn.addEventListener("click",function(){deleteCard(btn.dataset.delete);});
+      });
+      document.querySelectorAll("#cardList [data-jump-user]").forEach(function(el){
+        el.addEventListener("click",function(){jumpToUser(el.dataset.jumpUser);});
       });
     })
     .catch(function(e){document.getElementById("cardList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
@@ -363,7 +366,7 @@ function loadUserList(){
       var html='<div style="max-height:500px;overflow-y:auto">';
       users.forEach(function(u){
         var active=u.active?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
-        html+='<div style="padding:10px 0;border-bottom:1px solid var(--line)">';
+        html+='<div id="user-row-'+u.userId+'" data-uid="'+u.userId+'" style="padding:10px 0;border-bottom:1px solid var(--line);transition:background .5s">';
         html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">';
         html+='<div style="min-width:0;flex:1">';
         html+='<div><b style="font-size:13px">'+(u.userId||"").substring(0,16)+"...</b> "+active+"</div>";
@@ -380,6 +383,35 @@ function loadUserList(){
       });
     })
     .catch(function(e){document.getElementById("userList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
+}
+
+function jumpToUser(uid){
+  if(!uid)return;
+  // 切换到用户列表标签页
+  document.querySelectorAll(".tab-btn").forEach(function(b){
+    b.classList.toggle("active",b.dataset.tab==="users");
+  });
+  document.querySelectorAll(".tab-content").forEach(function(c){
+    c.classList.toggle("active",c.id==="tab-users");
+  });
+  // 确保用户列表已加载
+  var row=document.getElementById("user-row-"+uid);
+  if(!row){
+    // 用户列表还没加载完，加载完后再定位
+    loadUserList();
+    setTimeout(function(){
+      var r=document.getElementById("user-row-"+uid);
+      if(r){scrollAndHighlight(r);}
+    },600);
+    return;
+  }
+  scrollAndHighlight(row);
+}
+
+function scrollAndHighlight(row){
+  try{row.scrollIntoView({behavior:"smooth",block:"center"});}catch(e){}
+  row.style.background="var(--pink-1)";
+  setTimeout(function(){row.style.background="";},1800);
 }
 
 function viewUser(uid){
