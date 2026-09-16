@@ -730,7 +730,13 @@ function handleApi(req, res, pathname) {
         maxLiveSubs: auth.maxLiveSubs,
         liveSubs: (u.subs || []).length,
         weiboSubs: (u.weiboSubs || []).length,
-        pushType: u.pushType || ''
+        pushType: u.pushType || '',
+        subs: (u.subs || []).map(function (s) {
+          return { platform: s.platform, roomId: s.roomId, uname: s.uname || '', title: s.title || '' };
+        }),
+        weiboSubList: (u.weiboSubs || []).map(function (s) {
+          return { uid: s.uid || '', name: s.name || '' };
+        })
       });
     }
     return sendJson(res, 200, { success: true, users: userList });
