@@ -1295,7 +1295,7 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 function loadShareHistory(){
-  fetch(API + '/api/share/history', { headers: apiHeaders() })
+  fetch(API + '/api/share/list', { headers: apiHeaders() })
     .then(function(r){ return r.json(); })
     .then(function(data){
       var list = data.reviews || data || [];
@@ -1305,8 +1305,12 @@ function loadShareHistory(){
       var html = '<div style="margin-top:8px;font-size:12px;color:var(--ink-3)">提交记录:</div>';
       list.forEach(function(r){
         var platName = r.platform === 'douyin' ? '抖音' : r.platform === 'xiaohongshu' ? '小红书' : (r.platform || '');
-        var statusText = r.status === 'approved' ? '<span style="color:#51cf66">已通过(会员已发放)</span>' : r.status === 'rejected' ? '<span style="color:#ff6b6b">未通过</span>' : '<span style="color:#ffa500">待审核</span>';
-        html += '<div style="padding:6px 0;border-bottom:1px dashed var(--line);font-size:12px">' + platName + ': ' + (r.account||'') + ' - ' + statusText + '</div>';
+        var statusText = r.status === 'approved' ? '<span style="color:#51cf66">✅ 已通过(7天会员已发放)</span>' : r.status === 'rejected' ? '<span style="color:#ff6b6b">❌ 未通过</span>' : '<span style="color:#ffa500">⏳ 待审核</span>';
+        html += '<div style="padding:6px 0;border-bottom:1px dashed var(--line);font-size:12px">' + platName + ': ' + (r.account||'') + ' - ' + statusText;
+        if(r.status === 'rejected' && r.reviewNote){
+          html += '<br><span style="color:#ff6b6b;font-size:11px">拒绝理由: ' + r.reviewNote + '</span>';
+        }
+        html += '</div>';
       });
       box.innerHTML = html;
     })
