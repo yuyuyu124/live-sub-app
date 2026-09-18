@@ -796,8 +796,10 @@ function handleApi(req, res, pathname) {
   // POST /api/admin/invites/:id/pay - 标记返现已支付
   if (method === 'POST' && parts[1] === 'admin' && parts[2] === 'invites' && parts[4] === 'pay' && parts.length === 5) {
     if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
-    const ok = invite.markCashPaid(parts[3]);
-    return sendJson(res, ok ? 200 : 404, { success: ok });
+    return readBody(req).then(function (body) {
+      const ok = invite.markCashPaid(parts[3], body.target);
+      return sendJson(res, ok ? 200 : 404, { success: ok });
+    });
   }
 
   // GET /api/admin/check - 检查当前用户是否是管理员
@@ -834,14 +836,20 @@ function handleApi(req, res, pathname) {
       if (!result.success) return sendJson(res, 400, result);
       // 处理邀请码
       const inviteCode = (body.inviteCode || '').trim();
+      let inviteeRewardAvailable = false;
+      let inviteeInviteId = null;
       if (inviteCode) {
         const inviterId = invite.findInviterByCode(inviteCode);
         if (inviterId && inviterId !== userId) {
-          invite.createInvite(inviterId, userId, code);
+          const iv = invite.createInvite(inviterId, userId, code);
+          if (iv.success) {
+            inviteeRewardAvailable = true;
+            inviteeInviteId = iv.invite.id;
+          }
         }
       }
       const auth = cards.getUserAuth(userId);
-      return sendJson(res, 200, { success: true, auth: auth });
+      return sendJson(res, 200, { success: true, auth: auth, inviteeRewardAvailable: inviteeRewardAvailable, inviteeInviteId: inviteeInviteId });
     });
   }
 
@@ -882,13 +890,22 @@ function handleApi(req, res, pathname) {
     const code = invite.getInviteCode(userId);
     const myInvites = invite.getUserInvites(userId);
     const pendingCount = myInvites.filter(function (i) { return i.rewardStatus === 'pending'; }).length;
-    return sendJson(res, 200, { success: true, inviteCode: code, inviteCount: myInvites.length, pendingCount: pendingCount, invites: myInvites });
+    const inviteePending = invite.getInviteePending(userId);
+    return sendJson(res, 200, { success: true, inviteCode: code, inviteCount: myInvites.length, pendingCount: pendingCount, invites: myInvites, inviteePending: inviteePending });
   }
 
   // POST /api/invite/claim - 领取邀请奖励
   if (method === 'POST' && parts[1] === 'invite' && parts[2] === 'claim' && parts.length === 3) {
     return readBody(req).then(function (body) {
       const result = invite.claimReward(body.inviteId, body.rewardType, body.phone || '', body.payMethod || '');
+      return sendJson(res, result.success ? 200 : 400, result);
+    });
+  }
+
+  // POST /api/invite/claim-invitee - 被邀请方领取奖励
+  if (method === 'POST' && parts[1] === 'invite' && parts[2] === 'claim-invitee' && parts.length === 3) {
+    return readBody(req).then(function (body) {
+      const result = invite.claimInviteeReward(body.inviteId, body.rewardType, body.phone || '', body.payMethod || '');
       return sendJson(res, result.success ? 200 : 400, result);
     });
   }
