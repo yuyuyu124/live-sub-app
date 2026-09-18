@@ -1125,6 +1125,9 @@ function doActivate(){
         document.getElementById('activateOverlay').style.display = 'none';
         updateUserBoxWithAuth();
         loadAfterAuth();
+        if(data.inviteeRewardAvailable && data.inviteeInviteId){
+          setTimeout(function(){ showInviteeReward(data.inviteeInviteId); }, 500);
+        }
       }, 1000);
     } else {
       msg.style.color = '#ff6b6b';
@@ -1233,6 +1236,9 @@ function activateFromTrial(){
       setTimeout(function(){
         updateUserBoxWithAuth();
         loadAfterAuth();
+        if(data.inviteeRewardAvailable && data.inviteeInviteId){
+          setTimeout(function(){ showInviteeReward(data.inviteeInviteId); }, 500);
+        }
       }, 1000);
     } else {
       msg.style.color = '#ff6b6b';
@@ -1341,7 +1347,54 @@ function loadInviteInfo(){
         html += '<div class="row"><span>' + new Date(inv.createdAt).toLocaleDateString() + ' ' + status + '</span><span>' + actions + '</span></div>';
       });
       box.innerHTML = html;
+      if(data.inviteePending){
+        setTimeout(function(){ showInviteeReward(data.inviteePending.id); }, 800);
+      }
     });
+}
+
+function showInviteeReward(inviteId){
+  var old = document.getElementById('inviteeRewardOverlay');
+  if(old) old.remove();
+  var ov = document.createElement('div');
+  ov.id = 'inviteeRewardOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:24px;max-width:340px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,.2);text-align:center">'
+    + '<div style="font-size:18px;font-weight:700;color:#E8557F;margin-bottom:6px">🎉 好友邀请奖励</div>'
+    + '<div style="color:#999;font-size:13px;margin-bottom:18px">感谢好友邀请，选一个奖励吧</div>'
+    + '<button id="irMem" style="width:100%;padding:12px;border:none;border-radius:8px;background:linear-gradient(135deg,#FF6B9D,#E8557F);color:#fff;font-size:15px;font-weight:600;margin-bottom:8px;cursor:pointer">2个月会员</button>'
+    + '<button id="irCash" style="width:100%;padding:12px;border:none;border-radius:8px;background:#fff;color:#E8557F;border:1px solid #E8557F;font-size:15px;font-weight:600;margin-bottom:8px;cursor:pointer">1元返现</button>'
+    + '<div id="irCashForm" style="display:none;margin-bottom:8px">'
+    + '<input id="irPhone" placeholder="手机号" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:8px;box-sizing:border-box">'
+    + '<select id="irPay" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:8px;box-sizing:border-box"><option value="alipay">支付宝</option><option value="wechat">微信</option></select>'
+    + '<button id="irCashSubmit" style="width:100%;padding:12px;border:none;border-radius:8px;background:#51cf66;color:#fff;font-size:15px;font-weight:600;cursor:pointer">提交返现申请</button>'
+    + '</div>'
+    + '<button id="irLater" style="width:100%;padding:10px;border:none;border-radius:8px;background:#f1f3f5;color:#999;font-size:14px;cursor:pointer">稍后再选</button>'
+    + '</div>';
+  document.body.appendChild(ov);
+  function close(){ ov.remove(); }
+  document.getElementById('irLater').onclick = close;
+  document.getElementById('irMem').onclick = function(){
+    fetch(API + '/api/invite/claim-invitee', { method:'POST', headers:apiHeaders(), body:JSON.stringify({inviteId:inviteId,rewardType:'membership'}) })
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.success){ alert('2个月会员已到账！'); close(); location.reload(); }
+        else alert(d.error || '领取失败');
+      });
+  };
+  document.getElementById('irCash').onclick = function(){
+    document.getElementById('irCashForm').style.display = 'block';
+  };
+  document.getElementById('irCashSubmit').onclick = function(){
+    var phone = document.getElementById('irPhone').value.trim();
+    var pay = document.getElementById('irPay').value;
+    fetch(API + '/api/invite/claim-invitee', { method:'POST', headers:apiHeaders(), body:JSON.stringify({inviteId:inviteId,rewardType:'cash',phone:phone,payMethod:pay}) })
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.success){ alert('返现申请已提交，管理员会尽快打款'); close(); }
+        else alert(d.error || '提交失败');
+      });
+  };
 }
 
 function copyInviteCode(){
