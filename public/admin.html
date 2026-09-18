@@ -230,32 +230,40 @@ function loadCashbackList(){
     .then(function(r){return r.json();})
     .then(function(data){
       var list=data.invites||data||[];
-      var pending=list.filter(function(i){return i.rewardStatus==="cash_pending";});
-      if(!pending.length){document.getElementById("cashbackList").innerHTML='<div class="empty">没有待处理的返现</div>';return;}
+      var items=[];
+      list.forEach(function(i){
+        if(i.rewardStatus==="cash_pending"){
+          items.push({id:i.id,target:"inviter",side:"邀请方",amount:2,phone:i.cashPhone||"",method:i.cashMethod||"",inviterId:i.inviterId,inviteeId:i.inviteeId});
+        }
+        if(i.inviteeRewardStatus==="cash_pending"){
+          items.push({id:i.id,target:"invitee",side:"被邀请方",amount:1,phone:i.inviteeCashPhone||"",method:i.inviteeCashMethod||"",inviterId:i.inviterId,inviteeId:i.inviteeId});
+        }
+      });
+      if(!items.length){document.getElementById("cashbackList").innerHTML='<div class="empty">没有待处理的返现</div>';return;}
       var html="";
-      pending.forEach(function(i){
-        var method=i.cashMethod==="alipay"?"支付宝":i.cashMethod==="wechat"?"微信":(i.cashMethod||"未填");
+      items.forEach(function(it){
+        var method=it.method==="alipay"?"支付宝":it.method==="wechat"?"微信":(it.method||"未填");
         html+='<div class="invite-item"><div class="invite-info">';
-        html+="邀请人: <b>"+(i.inviterId||"").substring(0,12)+"...</b><br>";
-        html+="被邀请人: <b>"+(i.inviteeId||"").substring(0,12)+"...</b><br>";
-        html+="手机号: <b>"+(i.cashPhone||"未填")+"</b><br>";
+        html+='<span class="badge badge-cash_pending">'+it.side+' '+it.amount+'元</span><br>';
+        html+="邀请人: <b>"+(it.inviterId||"").substring(0,12)+"...</b><br>";
+        html+="被邀请人: <b>"+(it.inviteeId||"").substring(0,12)+"...</b><br>";
+        html+="手机号: <b>"+(it.phone||"未填")+"</b><br>";
         html+="收款方式: <b>"+method+"</b><br>";
-        html+='<span class="badge badge-cash_pending">待打款</span>';
         html+='</div><div class="review-actions">';
-        html+='<button class="btn btn-paid" data-cash="'+i.id+'">标记已支付</button>';
+        html+='<button class="btn btn-paid" data-cash="'+it.id+'" data-target="'+it.target+'">标记已支付</button>';
         html+="</div></div>";
       });
       document.getElementById("cashbackList").innerHTML=html;
       document.querySelectorAll("#cashbackList [data-cash]").forEach(function(btn){
-        btn.addEventListener("click",function(){markCashPaid(btn.dataset.cash);});
+        btn.addEventListener("click",function(){markCashPaid(btn.dataset.cash,btn.dataset.target);});
       });
     })
     .catch(function(e){document.getElementById("cashbackList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
 }
 
-function markCashPaid(id){
+function markCashPaid(id,target){
   if(!confirm("确认已通过返现支付？"))return;
-  fetch("/api/admin/invites/"+id+"/pay",{method:"POST",headers:apiHeaders()})
+  fetch("/api/admin/invites/"+id+"/pay",{method:"POST",headers:Object.assign({},apiHeaders(),{"Content-Type":"application/json"}),body:JSON.stringify({target:target})})
     .then(function(r){return r.json();})
     .then(function(data){
       if(data.success!==false){alert("已标记为已支付");loadCashbackList();}
