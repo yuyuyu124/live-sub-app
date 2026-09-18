@@ -206,11 +206,19 @@ function loadShareList(){
 }
 
 function reviewShare(id,approved){
-  if(!confirm(approved?"确认通过？将发放 7 天会员":"确认拒绝？"))return;
-  fetch("/api/admin/share/review",{method:"POST",headers:apiHeaders(),body:JSON.stringify({id:id,approved:approved})})
+  var note='';
+  if(approved){
+    if(!confirm("确认通过？将发放 7 天会员"))return;
+  }else{
+    note=prompt("请输入拒绝理由（用户会看到）：");
+    if(note===null)return;
+    note=(note||"").trim();
+    if(!note){alert("请填写拒绝理由");return;}
+  }
+  fetch("/api/admin/share/review",{method:"POST",headers:apiHeaders(),body:JSON.stringify({id:id,approved:approved,note:note})})
     .then(function(r){return r.json();})
     .then(function(data){
-      if(data.success!==false){alert(approved?"已通过，7 天会员已发放":"已拒绝");loadShareList();}
+      if(data.success!==false){alert(approved?"已通过，7 天会员已发放":"已拒绝，理由已通知用户");loadShareList();}
       else{alert("操作失败: "+(data.error||""));}
     })
     .catch(function(e){alert("网络错误: "+e.message);});
