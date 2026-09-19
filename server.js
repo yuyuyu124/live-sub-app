@@ -47,6 +47,27 @@ let weiboFirstCheck = true;
 let sseClients = [];   // [{ res, userId }]
 
 // ============================================================
+// 推送配置:卡密优先,回退到用户 store(兼容老用户)
+//   - 读取:先查卡密上的 pushType/pushKey,没有就用旧 store 数据
+//   - 写入:同时写到卡密和 store 两份
+// 这样卡密重新绑定到新 userId 后,推送配置自动跟着卡密走
+// ============================================================
+function getEffectivePushConfig(userId) {
+  const auth = cards.getUserAuth(userId);
+  if (auth && auth.cardCode) {
+    const cardCfg = cards.getCardPushConfig(auth.cardCode);
+    if (cardCfg.pushType) return cardCfg;
+  }
+  return store.getPushConfig(userId);
+}
+
+function setEffectivePushConfig(userId, cfg) {
+  store.setPushConfig(userId, cfg);
+  const auth = cards.getUserAuth(userId);
+  if (auth && auth.cardCode) cards.setCardPushConfig(auth.cardCode, cfg);
+}
+
+// ============================================================
 // HTTP 工具
 // ============================================================
 async function httpGet(urlStr, options) {
@@ -489,7 +510,7 @@ async function checkAllLive() {
             cover: info.cover || sub.cover || '', avatar: info.avatar || sub.avatar || ''
           });
           // 服务器主动推送(用该用户的 pushKey)
-          const cfg = store.getPushConfig(userId);
+          const cfg = getEffectivePushConfig(userId);
           if (cfg.pushType && cfg.pushKey) {
             const title = '开播提醒: ' + (info.uname || sub.uname || sub.roomId);
             const desp = (sub.platform || '') + ' 主播 ' + (info.uname || sub.uname || sub.roomId) +
@@ -502,7 +523,7 @@ async function checkAllLive() {
           // 下播时主动推送(仅当该用户开了 endedAlert 且配置了推送)
           const prefs = store.getPreferences(userId);
           if (prefs.endedAlert) {
-            const cfg = store.getPushConfig(userId);
+            const cfg = getEffectivePushConfig(userId);
             if (cfg.pushType && cfg.pushKey) {
               const title = '下播提醒: ' + (info.uname || sub.uname || sub.roomId);
               const desp = (sub.platform || '') + ' 主播 ' + (info.uname || sub.uname || sub.roomId) +
@@ -573,7 +594,7 @@ async function checkAllWeibo() {
             id: sub.id, uid: g.uid, mid: p.mid, title: p.title, link: p.link,
             author: p.author || sub.uname, description: p.description
           });
-          const cfg = store.getPushConfig(userId);
+          const cfg = getEffectivePushConfig(userId);
           if (cfg.pushType && cfg.pushKey) {
             const title = '📢 微博更新 · ' + (p.author || sub.uname || g.uid);
             const desp = '【' + (p.author || sub.uname || g.uid) + '】' + (p.title || '') + '\n🔗 ' + p.link;
@@ -721,6 +742,7 @@ function handleApi(req, res, pathname) {
       const u = allUsers[uid];
       if (!u) continue;
       const auth = cards.getUserAuth(uid);
+      const pushCfg = getEffectivePushConfig(uid);
       userList.push({
         userId: uid,
         cardCode: auth.cardCode,
@@ -730,7 +752,7 @@ function handleApi(req, res, pathname) {
         maxLiveSubs: auth.maxLiveSubs,
         liveSubs: (u.subs || []).length,
         weiboSubs: (u.weiboSubs || []).length,
-        pushType: u.pushType || '',
+        pushType: pushCfg.pushType,
         subs: (u.subs || []).map(function (s) {
           return { platform: s.platform, roomId: s.roomId, uname: s.uname || '', title: s.title || '' };
         }),
@@ -749,6 +771,7 @@ function handleApi(req, res, pathname) {
     const u = store.getUser(targetUid);
     if (!u) return sendJson(res, 404, { success: false, error: '用户不存在' });
     const auth = cards.getUserAuth(targetUid);
+    const pushCfg = getEffectivePushConfig(targetUid);
     return sendJson(res, 200, {
       success: true,
       user: {
@@ -758,8 +781,8 @@ function handleApi(req, res, pathname) {
         expiresAt: auth.expiresAt,
         daysLeft: auth.daysLeft,
         maxLiveSubs: auth.maxLiveSubs,
-        pushType: u.pushType || '',
-        pushKey: u.pushKey || '',
+        pushType: pushCfg.pushType,
+        pushKey: pushCfg.pushKey,
         subs: (u.subs || []).map(function (s) {
           return { id: s.id, platform: s.platform, roomId: s.roomId, uname: s.uname || '', avatar: s.avatar || '', liveStatus: s.liveStatus, title: s.title || '', remark: s.remark || '' };
         }),
@@ -828,12 +851,35 @@ function handleApi(req, res, pathname) {
   }
 
   // POST /api/auth/activate - 激活卡密（不需要已激活的卡密）
+  // 支持卡密恢复:已使用的卡密重新输入后会绑定到当前 userId,并自动迁移原用户的订阅/偏好数据
   if (method === 'POST' && parts[1] === 'auth' && parts[2] === 'activate' && parts.length === 3) {
     return readBody(req).then(function (body) {
       const code = (body.code || '').trim().toUpperCase();
       if (!code) return sendJson(res, 400, { success: false, error: '请输入卡密' });
       const result = cards.activateCard(code, userId);
       if (!result.success) return sendJson(res, 400, result);
+
+      // 卡密重新绑定到新 userId:迁移原用户的订阅和偏好数据
+      if (result.rebound && result.oldUserId && result.oldUserId !== userId) {
+        const oldUser = store.getUser(result.oldUserId);
+        // 1. 直播订阅
+        if (oldUser && Array.isArray(oldUser.subs) && oldUser.subs.length > 0) {
+          store.setSubs(userId, oldUser.subs);
+        }
+        // 2. 微博订阅
+        if (oldUser && Array.isArray(oldUser.weiboSubs) && oldUser.weiboSubs.length > 0) {
+          for (const w of oldUser.weiboSubs) store.addWeiboSub(userId, w);
+        }
+        // 3. 偏好设置(下播提醒开关等)
+        if (oldUser && typeof oldUser.endedAlert === 'boolean') {
+          store.setPreferences(userId, { endedAlert: oldUser.endedAlert });
+        }
+        // 4. 兼容老用户:卡密上没有推送配置但旧用户 store 里有时,把它写到卡密上(之后随卡密走)
+        if (result.card && !result.card.pushType && oldUser && oldUser.pushType) {
+          cards.setCardPushConfig(code, { pushType: oldUser.pushType, pushKey: oldUser.pushKey || '' });
+        }
+      }
+
       // 处理邀请码
       const inviteCode = (body.inviteCode || '').trim();
       let inviteeRewardAvailable = false;
@@ -849,7 +895,14 @@ function handleApi(req, res, pathname) {
         }
       }
       const auth = cards.getUserAuth(userId);
-      return sendJson(res, 200, { success: true, auth: auth, inviteeRewardAvailable: inviteeRewardAvailable, inviteeInviteId: inviteeInviteId });
+      return sendJson(res, 200, {
+        success: true,
+        auth: auth,
+        rebound: !!result.rebound,
+        alreadyBound: !!result.alreadyBound,
+        inviteeRewardAvailable: inviteeRewardAvailable,
+        inviteeInviteId: inviteeInviteId
+      });
     });
   }
 
@@ -1039,19 +1092,19 @@ function handleApi(req, res, pathname) {
   }
 
   // ===== 推送配置接口 =====
-  // GET /api/push-config
+  // GET /api/push-config (卡密优先,回退 store)
   if (method === 'GET' && parts[1] === 'push-config' && parts.length === 2) {
-    const cfg = store.getPushConfig(userId);
+    const cfg = getEffectivePushConfig(userId);
     return sendJson(res, 200, { success: true, config: { pushType: cfg.pushType, pushKey: cfg.pushKey } });
   }
-  // POST /api/push-config
+  // POST /api/push-config (同时写卡密和 store)
   if (method === 'POST' && parts[1] === 'push-config' && parts.length === 2) {
     return readBody(req).then(function (body) {
       const cfg = { pushType: (body.pushType || '').trim(), pushKey: (body.pushKey || '').trim() };
       if (cfg.pushType && !['serverchan', 'pushplus', 'bark'].includes(cfg.pushType)) {
         return sendJson(res, 200, { success: false, message: '推送方式不支持' });
       }
-      store.setPushConfig(userId, cfg);
+      setEffectivePushConfig(userId, cfg);
       return sendJson(res, 200, { success: true });
     });
   }

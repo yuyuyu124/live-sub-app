@@ -1120,7 +1120,13 @@ function doActivate(){
     if(data.success){
       currentAuth = data.auth;
       msg.style.color = '#51cf66';
-      msg.textContent = '✅ 激活成功！有效期至 ' + new Date(data.auth.expiresAt).toLocaleDateString();
+      if(data.rebound){
+        msg.textContent = '✅ 卡密已恢复！订阅和推送配置已迁移到当前设备';
+      } else if(data.alreadyBound){
+        msg.textContent = '✅ 卡密已绑定到当前用户';
+      } else {
+        msg.textContent = '✅ 激活成功！有效期至 ' + new Date(data.auth.expiresAt).toLocaleDateString();
+      }
       setTimeout(function(){
         document.getElementById('activateOverlay').style.display = 'none';
         updateUserBoxWithAuth();
@@ -1232,7 +1238,11 @@ function activateFromTrial(){
     if(data.success){
       currentAuth = data.auth;
       msg.style.color = '#51cf66';
-      msg.textContent = '✅ 激活成功！已升级为正式会员';
+      if(data.rebound){
+        msg.textContent = '✅ 卡密已恢复！订阅和推送配置已迁移到当前设备';
+      } else {
+        msg.textContent = '✅ 激活成功！已升级为正式会员';
+      }
       setTimeout(function(){
         updateUserBoxWithAuth();
         loadAfterAuth();
