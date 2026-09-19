@@ -921,6 +921,22 @@ function loadPushStatus(){
 
 /* ---- 数据同步：把本地订阅推给服务端，拉取最新状态 ---- */
 function syncSubs(){
+  // 本地没有订阅时,先从服务器拉取(避免用空数据覆盖服务端已迁移的订阅)
+  if(!localSubs || localSubs.length === 0){
+    return fetch(API + '/api/subs', { headers: apiHeaders() })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.success && Array.isArray(d.subs)){
+          localSubs = d.subs.map(function(s){
+            return { id: s.id, platform: s.platform, roomId: s.roomId, remark: s.remark || '' };
+          });
+          saveLocal();
+          subs = d.subs;
+          renderList();
+        }
+      })
+      .catch(function(){});
+  }
   return fetch(API + '/api/subs/sync', {
     method: 'POST',
     headers: apiHeaders(),
