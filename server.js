@@ -992,9 +992,18 @@ function handleApi(req, res, pathname) {
     return readBody(req).then(async function (body) {
       const incoming = Array.isArray(body.subs) ? body.subs : [];
       const existingSubs = store.getSubs(userId);
+      // 检查订阅数量上限(微博+直播共用配额)
+      const userAuth = cards.getUserAuth(userId);
+      if (!userAuth.active) {
+        return sendJson(res, 200, { success: false, error: '卡密未激活或已过期,请先激活卡密' });
+      }
+      const weiboCount = store.getWeiboSubs(userId).length;
+      const maxAllowed = Math.max(0, userAuth.maxLiveSubs - weiboCount);
+      // 截断超出部分
+      const capped = incoming.slice(0, maxAllowed);
       const next = [];
       const seen = {};
-      for (const s of incoming) {
+      for (const s of capped) {
         if (!s || !s.roomId) continue;
         const pf = s.platform === 'douyin' ? 'douyin' : 'bilibili';
         const key = pf + ':' + String(s.roomId);
