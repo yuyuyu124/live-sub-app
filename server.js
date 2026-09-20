@@ -1032,9 +1032,13 @@ function handleApi(req, res, pathname) {
       const subs = store.getSubs(userId);
       const existing = subs.find(function (s) { return s.platform === parsed.platform && s.roomId === parsed.roomId; });
       if (existing) return sendJson(res, 200, { success: false, error: '该直播间已添加过啦' });
-      // 检查订阅数量上限
+      // 检查订阅数量上限(微博和直播共用配额)
       const userAuth = cards.getUserAuth(userId);
-      if (subs.length >= userAuth.maxLiveSubs) {
+      if (!userAuth.active) {
+        return sendJson(res, 200, { success: false, error: '卡密未激活或已过期,请先激活卡密再添加订阅' });
+      }
+      const totalSubs = subs.length + store.getWeiboSubs(userId).length;
+      if (totalSubs >= userAuth.maxLiveSubs) {
         return sendJson(res, 200, { success: false, error: '订阅数量已达上限(' + userAuth.maxLiveSubs + '个),请升级卡密或删除已有订阅。购买/升级卡密可闲鱼搜索观铃VV或搜索小红书号guanlingV' });
       }
       const sub = { id: Date.now().toString() + Math.floor(Math.random() * 1000), platform: parsed.platform, roomId: parsed.roomId, uname: '', avatar: '', cover: '', liveStatus: 0, title: '', remark: '' };
@@ -1150,6 +1154,15 @@ function handleApi(req, res, pathname) {
       const wsubs = store.getWeiboSubs(userId);
       const existing = wsubs.find(function (s) { return String(s.uid) === String(parsed.uid); });
       if (existing) return sendJson(res, 200, { success: false, error: '该博主已订阅过了' });
+      // 检查订阅数量上限(微博和直播共用配额)
+      const userAuth = cards.getUserAuth(userId);
+      if (!userAuth.active) {
+        return sendJson(res, 200, { success: false, error: '卡密未激活或已过期,请先激活卡密再添加订阅' });
+      }
+      const totalSubs = wsubs.length + store.getSubs(userId).length;
+      if (totalSubs >= userAuth.maxLiveSubs) {
+        return sendJson(res, 200, { success: false, error: '订阅数量已达上限(' + userAuth.maxLiveSubs + '个),请升级卡密或删除已有订阅。购买/升级卡密可闲鱼搜索观铃VV或搜索小红书号guanlingV' });
+      }
       const sub = { id: Date.now().toString() + Math.floor(Math.random() * 1000), uid: parsed.uid, uname: '', lastMid: '', lastTitle: '' };
       // 拉一次拿博主名 + 初始化 lastMid
       try {
