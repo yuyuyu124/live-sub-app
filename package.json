@@ -11,6 +11,6 @@
   },
   "license": "MIT",
   "dependencies": {
-    "nodemailer": "^10.0.10"
+    "nodemailer": "^6.10.1"
   }
 }
