@@ -114,7 +114,8 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
         <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
           <select id="cardFilter" onchange="loadCardList()" style="padding:8px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px">
             <option value="all">全部</option>
-            <option value="active">已激活</option>
+            <option value="active_trial">已激活(试用)</option>
+            <option value="active_formal">已激活(正式)</option>
             <option value="inactive">未激活</option>
             <option value="disabled">已停用</option>
           </select>
@@ -126,6 +127,14 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
     <div id="tab-users" class="tab-content">
       <div class="card">
         <div class="card-title">用户列表</div>
+        <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
+          <select id="userFilter" onchange="loadUserList()" style="padding:8px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px">
+            <option value="all">全部</option>
+            <option value="trial">试用用户</option>
+            <option value="formal">正式用户</option>
+            <option value="inactive">未激活/已停用</option>
+          </select>
+        </div>
         <div id="userList"><div class="loading">加载中...</div></div>
       </div>
     </div>
@@ -310,18 +319,20 @@ function loadCardList(){
       var filter = document.getElementById('cardFilter') ? document.getElementById('cardFilter').value : 'all';
       var filtered = list.filter(function(c){
         if(filter === 'all') return true;
-        if(filter === 'active') return !isDisabled(c) && c.boundUserId;
+        if(filter === 'active_trial') return !isDisabled(c) && c.boundUserId && c.type === 'trial';
+        if(filter === 'active_formal') return !isDisabled(c) && c.boundUserId && c.type !== 'trial';
         if(filter === 'inactive') return !isDisabled(c) && !c.boundUserId;
         if(filter === 'disabled') return isDisabled(c);
         return true;
       });
       if(!filtered.length){document.getElementById('cardList').innerHTML='<div class="empty">没有符合条件的卡密</div>';return;}
       filtered.forEach(function(c){
+        var cardType=c.type==='trial'?'<span class="badge badge-pending">试用</span>':c.boundUserId?'<span class="badge badge-approved">正式</span>':'';
         var status=c.disabled?'<span class="badge badge-rejected">已停用</span>':isExpired(c)?'<span class="badge badge-rejected">已到期</span>':c.boundUserId?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
         var remark=c.remark?' <span style="font-size:11px;color:var(--rose-d);background:var(--pink-1);padding:2px 6px;border-radius:4px">'+c.remark+"</span>":"";
         html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);gap:8px">';
         html+='<div style="min-width:0;flex:1">';
-        html+='<div><b style="font-size:13px">'+(c.code||"")+'</b> <span style="font-size:11px;color:var(--ink-3)">'+c.days+"天/"+c.maxLiveSubs+"订阅</span> "+status+remark+"</div>";
+        html+='<div><b style="font-size:13px">'+(c.code||"")+'</b> <span style="font-size:11px;color:var(--ink-3)">'+c.days+"天/"+c.maxLiveSubs+"订阅</span> "+status+' '+cardType+remark+"</div>";
         if(c.boundUserId)html+='<div style="font-size:11px;color:var(--ink-3);margin-top:2px">用户: <span data-jump-user="'+c.boundUserId+'" style="color:var(--rose-d);cursor:pointer;text-decoration:underline">'+(c.boundUserId||"").substring(0,16)+"...</span> 到期: "+(c.expiresAt||"").substring(0,10)+"</div>";
         html+="</div>";
         html+='<div style="display:flex;gap:4px;flex-shrink:0;align-items:center">';
@@ -378,14 +389,23 @@ function loadUserList(){
     .then(function(r){return r.json();})
     .then(function(data){
       var users=data.users||data||[];
-      if(!users.length){document.getElementById("userList").innerHTML='<div class="empty">暂无用户</div>';return;}
+      var uFilter = document.getElementById("userFilter") ? document.getElementById("userFilter").value : "all";
+      users = users.filter(function(u){
+        if(uFilter === "all") return true;
+        if(uFilter === "trial") return u.type === "trial";
+        if(uFilter === "formal") return u.type === "formal";
+        if(uFilter === "inactive") return !u.active;
+        return true;
+      });
+      if(!users.length){document.getElementById("userList").innerHTML='<div class="empty">暂无符合条件的用户</div>';return;}
       var html='<div style="max-height:500px;overflow-y:auto">';
       users.forEach(function(u){
         var active=u.active?'<span class="badge badge-approved">已激活</span>':'<span class="badge badge-pending">未激活</span>';
+        var typeBadge = u.type === 'trial' ? '<span class="badge badge-pending">试用</span>' : u.type === 'formal' ? '<span class="badge badge-approved">正式</span>' : '';
         html+='<div id="user-row-'+u.userId+'" data-uid="'+u.userId+'" style="padding:10px 0;border-bottom:1px solid var(--line);transition:background .5s">';
         html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">';
         html+='<div style="min-width:0;flex:1">';
-        html+='<div><b style="font-size:13px">'+(u.userId||"").substring(0,16)+"...</b> "+active+"</div>";
+        html+='<div><b style="font-size:13px">'+(u.userId||"").substring(0,16)+"...</b> "+active+' '+typeBadge+"</div>";
         html+='<div style="font-size:11px;color:var(--ink-3);margin-top:3px">卡密: '+(u.cardCode||"无")+" | 订阅: "+(u.liveSubs||0)+"/"+(u.maxLiveSubs||5)+"</div>";
         // 推送渠道
         var pushMap = {serverchan:'Server酱(微信)',pushplus:'PushPlus(微信)',bark:'Bark(iOS)',qqemail:'QQ邮箱',wecom:'企业微信',dingtalk:'钉钉',telegram:'Telegram',email:'邮件'};
