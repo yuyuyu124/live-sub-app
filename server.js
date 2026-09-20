@@ -1121,7 +1121,7 @@ function handleApi(req, res, pathname) {
   if (method === 'POST' && parts[1] === 'push-config' && parts.length === 2) {
     return readBody(req).then(function (body) {
       const cfg = { pushType: (body.pushType || '').trim(), pushKey: (body.pushKey || '').trim() };
-      if (cfg.pushType && !['serverchan', 'pushplus', 'bark'].includes(cfg.pushType)) {
+      if (cfg.pushType && !['serverchan', 'pushplus', 'bark', 'qqemail'].includes(cfg.pushType)) {
         return sendJson(res, 200, { success: false, message: '推送方式不支持' });
       }
       setEffectivePushConfig(userId, cfg);
