@@ -1275,38 +1275,6 @@ const server = http.createServer(handleRequest);
 server.listen(PORT, '0.0.0.0', function () {
   console.log('📡 直播订阅服务(多用户版)已启动');
   console.log('   端口: ' + PORT);
-  // 启动时清理超出配额的订阅
-  var allUsers = store.getAllUsers();
-  var cleaned = 0;
-  for (var uid in allUsers) {
-    var u = allUsers[uid];
-    var auth = cards.getUserAuth(uid);
-    if (!auth.active) continue;
-    var liveSubs = u.subs || [];
-    var weiboSubs = u.weiboSubs || [];
-    var total = liveSubs.length + weiboSubs.length;
-    if (total > auth.maxLiveSubs) {
-      // 先砍微博,再砍直播
-      var keep = auth.maxLiveSubs;
-      if (weiboSubs.length > 0) {
-        var cutWeibo = Math.min(weiboSubs.length, weiboSubs.length + liveSubs.length - keep);
-        if (cutWeibo > 0) {
-          u.weiboSubs = weiboSubs.slice(0, weiboSubs.length - cutWeibo);
-        }
-      }
-      var remaining = (u.weiboSubs || []).length;
-      var liveKeep = Math.max(0, keep - remaining);
-      if (liveSubs.length > liveKeep) {
-        u.subs = liveSubs.slice(0, liveKeep);
-      }
-      cleaned++;
-      console.log('   清理用户 ' + uid.substring(0, 8) + '... 订阅从 ' + total + ' 截断到 ' + auth.maxLiveSubs);
-    }
-  }
-  if (cleaned > 0) {
-    store.save();
-    console.log('   共清理 ' + cleaned + ' 个超出配额的用户');
-  }
   const rooms = store.getAllSubsGroupedByRoom();
   console.log('   直播订阅房间数(去重): ' + rooms.length);
   const wgroups = store.getAllWeiboSubsGroupedByUid();
