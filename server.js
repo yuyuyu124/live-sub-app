@@ -1023,9 +1023,16 @@ function handleApi(req, res, pathname) {
       await checkAllLive();
       broadcastToUser(userId, 'live-subs-updated', {});
       const subs = store.getSubs(userId);
-      return sendJson(res, 200, { success: true, subs: subs.map(function (s) {
-        return { id: s.id, platform: s.platform, roomId: s.roomId, uname: s.uname || '', avatar: s.avatar || '', cover: s.cover || '', liveStatus: s.liveStatus, title: s.title || '', remark: s.remark || '' };
-      }) });
+      const cappedCount = incoming.length - capped.length;
+      return sendJson(res, 200, {
+        success: true,
+        subs: subs.map(function (s) {
+          return { id: s.id, platform: s.platform, roomId: s.roomId, uname: s.uname || '', avatar: s.avatar || '', cover: s.cover || '', liveStatus: s.liveStatus, title: s.title || '', remark: s.remark || '' };
+        }),
+        capped: cappedCount > 0,
+        cappedCount: cappedCount,
+        maxLiveSubs: userAuth.maxLiveSubs
+      });
     });
   }
 

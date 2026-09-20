@@ -942,7 +942,18 @@ function syncSubs(){
     headers: apiHeaders(),
     body: JSON.stringify({ subs: localSubs })
   }).then(function(r){ return r.json(); }).then(function(d){
-    if(d.success){ subs = d.subs || []; renderList(); }
+    if(d.success){
+      subs = d.subs || []; renderList();
+      // 同步本地localStorage为服务器返回的(截断后的)列表
+      localSubs = subs.map(function(s){
+        return { id: s.id, platform: s.platform, roomId: s.roomId, remark: s.remark || '' };
+      });
+      saveLocal();
+      // 如果服务器截断了超出配额的订阅,提示用户
+      if(d.capped && d.cappedCount > 0){
+        showToast('订阅数量超出上限(' + d.maxLiveSubs + '个),已自动移除' + d.cappedCount + '个超出订阅,升级卡密可增加上限');
+      }
+    }
   }).catch(function(){});
 }
 
