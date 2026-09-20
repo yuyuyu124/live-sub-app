@@ -115,14 +115,14 @@ const howtoMap = {
   serverchan: '📌 <b>Server酱</b><br>1. 微信扫码登录 <a href="https://sct.ftqq.com/r/25644" target="_blank">sct.ftqq.com/r/25644</a><br>2. 登录后复制 SendKey<br>3. 粘贴到上方输入框',
   pushplus: '📌 <b>PushPlus</b><br>1. 微信扫码登录 <a href="https://www.pushplus.plus" target="_blank">pushplus.plus</a><br>2. 复制一对一推送 token<br>3. 粘贴到上方输入框',
   bark: '📌 <b>Bark</b><br>1. App Store 装 Bark<br>2. 打开 App 复制首页 URL<br>3. 粘贴完整 URL 或末尾 key',
-  qqemail: '📌 <b>QQ邮箱</b><br>1. 登录 <a href="https://mail.qq.com" target="_blank">mail.qq.com</a>,设置 → 账户 → 开启 SMTP 服务<br>2. 按提示发送短信,拿到 <b>授权码</b>(不是QQ密码)<br>3. 输入框填写格式:<b>你的QQ号@qq.com|授权码</b><br>例如:123456@qq.com|abcdefghijk'
+  qqemail: '📌 <b>QQ邮箱</b><br>1. 登录 <a href="https://mail.qq.com" target="_blank">mail.qq.com</a>,设置 → 账户 → 开启 SMTP 服务<br>2. 按提示发送短信,拿到 <b>授权码</b>(不是QQ密码)<br>3. 输入框填写格式:<b>你的QQ号@qq.com#授权码</b><br>例如:123456@qq.com#abcdefghijk'
 };
 function showToast(m){const t=document.getElementById('toast');t.innerHTML=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 function updateRadioUI(){
   document.querySelectorAll('.radio-item').forEach(i=>{const r=i.querySelector('input');i.classList.toggle('active',r.checked)});
   const sel=document.querySelector('input[name=pushType]:checked');
   document.getElementById('howto').innerHTML=sel?howtoMap[sel.value]:'';
-  const ph={serverchan:'粘贴 SCT 开头的 sendkey',pushplus:'粘贴 PushPlus token',bark:'粘贴 bark key 或完整 URL',qqemail:'邮箱@qq.com|授权码,如 123456@qq.com|abcdef'}
+  const ph={serverchan:'粘贴 SCT 开头的 sendkey',pushplus:'粘贴 PushPlus token',bark:'粘贴 bark key 或完整 URL',qqemail:'邮箱@qq.com#授权码,如 123456@qq.com#abcdef'}
   if(sel)document.getElementById('pushKey').placeholder=ph[sel.value];
 }
 document.querySelectorAll('input[name=pushType]').forEach(r=>r.addEventListener('change',updateRadioUI));
