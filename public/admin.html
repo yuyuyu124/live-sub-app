@@ -134,6 +134,7 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
             <option value="formal">正式用户</option>
             <option value="inactive">未激活/已停用</option>
           </select>
+          <input id="userSearch" type="text" placeholder="搜索用户ID或卡密..." oninput="loadUserList()" style="flex:1;padding:8px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;outline:none">
         </div>
         <div id="userList"><div class="loading">加载中...</div></div>
       </div>
@@ -390,11 +391,16 @@ function loadUserList(){
     .then(function(data){
       var users=data.users||data||[];
       var uFilter = document.getElementById("userFilter") ? document.getElementById("userFilter").value : "all";
+      var keyword = (document.getElementById("userSearch") ? document.getElementById("userSearch").value : "").trim().toLowerCase();
       users = users.filter(function(u){
-        if(uFilter === "all") return true;
-        if(uFilter === "trial") return u.type === "trial";
-        if(uFilter === "formal") return u.type === "formal";
-        if(uFilter === "inactive") return !u.active;
+        if(uFilter === "trial" && u.type !== "trial") return false;
+        if(uFilter === "formal" && u.type !== "formal") return false;
+        if(uFilter === "inactive" && u.active) return false;
+        if(keyword){
+          var uid = (u.userId || "").toLowerCase();
+          var card = (u.cardCode || "").toLowerCase();
+          if(uid.indexOf(keyword) < 0 && card.indexOf(keyword) < 0) return false;
+        }
         return true;
       });
       if(!users.length){document.getElementById("userList").innerHTML='<div class="empty">暂无符合条件的用户</div>';return;}
