@@ -882,6 +882,14 @@ function handleApi(req, res, pathname) {
         }
       }
 
+      // 激活正式卡密时:把试用卡密的推送配置自动转移过来
+      if (!result.rebound && result.card && result.card.type !== 'trial') {
+        const trialInfo = cards.getUserTrialCard(userId);
+        if (trialInfo && trialInfo.card.pushType && !result.card.pushType) {
+          cards.setCardPushConfig(code, { pushType: trialInfo.card.pushType, pushKey: trialInfo.card.pushKey || '' });
+        }
+      }
+
       // 处理邀请码
       const inviteCode = (body.inviteCode || '').trim();
       let inviteeRewardAvailable = false;
