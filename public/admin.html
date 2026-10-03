@@ -487,6 +487,8 @@ function viewUser(uid){
       msg+="状态: "+(u.active?"已激活":"未激活")+"\n";
       msg+="订阅数: "+(u.liveSubs||0)+"/"+(u.maxLiveSubs||5)+"\n";
       if(u.expiresAt)msg+="到期: "+(u.expiresAt||"").substring(0,10)+"\n";
+      if(u.pushType)msg+="推送方式: "+(u.pushType)+"\n";
+      if(u.pushKey)msg+="推送Key: "+(u.pushKey)+"\n";
       if(u.trialFingerprint)msg+="设备指纹: "+(u.trialFingerprint||"")+"\n";
       if(subs.length){msg+="\n订阅列表:\n";subs.forEach(function(s){msg+="- "+(s.name||s.title||s.platform||"")+" / "+(s.roomId||"")+"\n";});}
       alert(msg);
