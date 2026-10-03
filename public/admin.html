@@ -74,6 +74,10 @@ header .sub{font-size:13px;opacity:.9;margin-top:4px}
         <div class="card-title">分享截图审核</div>
         <div id="shareList"><div class="loading">加载中...</div></div>
       </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title" onclick="var h=document.getElementById('shareHistory');h.style.display=h.style.display==='none'?'block':'none'" style="cursor:pointer">发放记录（点击展开/收起）</div>
+        <div id="shareHistory" style="display:none"><div class="loading">加载中...</div></div>
+      </div>
     </div>
 
     <div id="tab-cashback" class="tab-content">
@@ -213,6 +217,30 @@ function loadShareList(){
 
     })
     .catch(function(e){document.getElementById("shareList").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
+  loadShareHistory();
+}
+
+function loadShareHistory(){
+  fetch("/api/admin/share/history",{headers:apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var list=(data.reviews||data||[]).filter(function(r){return r.status!=='pending';});
+      if(!list.length){document.getElementById("shareHistory").innerHTML='<div class="empty">暂无历史记录</div>';return;}
+      var html='<div style="max-height:400px;overflow-y:auto">';
+      list.forEach(function(r){
+        var platName = r.platform === 'douyin' ? '抖音' : r.platform === 'xiaohongshu' ? '小红书' : (r.platform || '未填');
+        var statusBadge = r.status==='approved' ? "<span class='badge badge-approved'>已发放7天会员</span>" : "<span class='badge badge-pending'>已拒绝</span>";
+        var reviewTime = r.reviewedAt ? new Date(r.reviewedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}) : '';
+        html+='<div style="padding:10px 0;border-bottom:1px solid var(--line);font-size:13px">';
+        html+='<div>用户: <b>'+(r.userId||'').substring(0,12)+'</b> | 平台: <b>'+platName+'</b> | 账号: <b>'+(r.account||'')+'</b> '+statusBadge+'</div>';
+        html+='<div style="font-size:11px;color:var(--ink-3);margin-top:3px">提交: '+(r.createdAt?new Date(r.createdAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}):'')+' | 审核: '+reviewTime+'</div>';
+        if(r.reviewNote)html+='<div style="font-size:11px;color:var(--ink-3);margin-top:2px">理由: '+r.reviewNote+'</div>';
+        html+='</div>';
+      });
+      html+='</div>';
+      document.getElementById("shareHistory").innerHTML=html;
+    })
+    .catch(function(e){document.getElementById("shareHistory").innerHTML='<div class="empty">加载失败: '+e.message+"</div>";});
 }
 
 function reviewShare(id,approved){

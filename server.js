@@ -812,6 +812,12 @@ function handleApi(req, res, pathname) {
     });
   }
 
+  // GET /api/admin/share/history - 所有分享审核记录(含历史)
+  if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'share' && parts[3] === 'history' && parts.length === 4) {
+    if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
+    return sendJson(res, 200, { success: true, reviews: share.getAllReviews() });
+  }
+
   // GET /api/admin/invites - 所有邀请记录(返现管理)
   if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'invites' && parts.length === 3) {
     if (!isAdmin) return sendJson(res, 401, { success: false, error: '管理员 Token 无效' });
