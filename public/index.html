@@ -949,6 +949,8 @@ function syncSubs(){
         return { id: s.id, platform: s.platform, roomId: s.roomId, remark: s.remark || '' };
       });
       saveLocal();
+      // 订阅数变化后更新用户信息卡片
+      if(typeof updateUserBoxWithAuth === 'function') updateUserBoxWithAuth();
       // 如果服务器截断了超出配额的订阅,提示用户
       if(d.capped && d.cappedCount > 0){
         showToast('订阅数量超出上限(' + d.maxLiveSubs + '个),已自动移除' + d.cappedCount + '个超出订阅,升级卡密可增加上限');
