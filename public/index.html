@@ -961,17 +961,26 @@ var __syncing=false;
 function syncSubs(){
   if(__syncing) return Promise.resolve();
   __syncing=true;
+  // 合并: 服务器返回的为主, 保留前端刚添加但服务器暂未同步的订阅
+  function mergeSubs(serverList){
+    var serverKeys = {};
+    (serverList || []).forEach(function(s){ serverKeys[s.platform + ':' + s.roomId] = true; });
+    // 保留 subs 里有但服务器返回里没有的（doAdd 刚 push 的, 服务器可能因竞态丢了）
+    var keep = (subs || []).filter(function(s){ return !serverKeys[s.platform + ':' + s.roomId]; });
+    return (serverList || []).concat(keep);
+  }
   // 本地没有订阅时,先从服务器拉取(避免用空数据覆盖服务端已迁移的订阅)
   if(!localSubs || localSubs.length === 0){
     return fetch(API + '/api/subs', { headers: apiHeaders() })
       .then(function(r){ return r.json(); })
       .then(function(d){
         if(d.success && Array.isArray(d.subs)){
-          localSubs = d.subs.map(function(s){
+          subs = mergeSubs(d.subs);
+          localSubs = subs.map(function(s){
             return { id: s.id, platform: s.platform, roomId: s.roomId, remark: s.remark || '' };
           });
           saveLocal();
-          subs = d.subs;
+          applyPinned();
           renderList();
         }
       })
@@ -983,8 +992,10 @@ function syncSubs(){
     body: JSON.stringify({ subs: localSubs })
   }).then(function(r){ return r.json(); }).then(function(d){
     if(d.success){
-      subs = d.subs || []; renderList();
-      // 同步本地localStorage为服务器返回的(截断后的)列表
+      subs = mergeSubs(d.subs || []);
+      applyPinned();
+      renderList();
+      // 同步本地localStorage为合并后的列表
       localSubs = subs.map(function(s){
         return { id: s.id, platform: s.platform, roomId: s.roomId, remark: s.remark || '' };
       });
@@ -1009,10 +1020,14 @@ function doAdd(input, btn){
     body: JSON.stringify({ input: input })
   }).then(function(r){ return r.json(); }).then(function(d){
     if(d.success){
+      // 立即更新 subs 变量（renderList 用的就是 subs），不等 syncSubs
+      subs.push(d.sub);
       localSubs.push({ id: d.sub.id, platform: d.sub.platform, roomId: d.sub.roomId, remark: '' });
       saveLocal();
+      applyPinned();
+      renderList();
       showToast('订阅成功~');
-      syncSubs();
+      // 不调 syncSubs() —— 锁可能还被别的同步占着；后续 SSE 事件会自然触发
     }
     else showToast(d.error || '添加失败');
   }).catch(function(){ showToast('网络错误，请检查服务是否启动'); })
@@ -1627,4 +1642,4 @@ checkAuth(function(){
 });
 </script>
 
-</body></html>
+</body></html>
