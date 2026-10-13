@@ -138,6 +138,7 @@ async function getRealTtwid() {
 }
 
 async function douyinGetAPI(roomId) {
+  if (process.env.SKIP_DOUYIN_API === '1') return null;
   var cookieData = await getRealTtwid();
   var cookie = 'msToken=' + cookieData.msToken + '; ttwid=' + cookieData.ttwid + '; IsDouyinOpen=false';
   var apiPath = '/webcast/room/web/enter/?aid=6383&app_name=douyin_web&device_platform=web&enter_from=web_live&web_rid=' + roomId;

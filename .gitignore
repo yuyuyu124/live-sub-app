@@ -12,3 +12,16 @@ node_modules/
 
 # 日志
 *.log
+
+# 运行时数据（邀请/分享审核）
+invites.json
+share_reviews.json
+
+# 用户上传
+uploads/
+
+# 备份/临时文件
+*.bak
+*.safebak
+*.safebak2
+*.remark_bak

@@ -142,7 +142,11 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
   display:flex;flex-direction:column;align-items:center;gap:6px;
 }
 .live-empty::before{content:"📺";font-size:28px;line-height:1;opacity:.85}
-.live-item{
+.live-item.pinned{background:linear-gradient(135deg,#FFBFD6,#FF9EC0);border-left:3px solid #FF4F86;}
+
+.live-act{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:8px;}
+.act-left{display:flex;gap:6px;align-items:center;}
+.live-item{flex-wrap:wrap;
   display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;
   background:var(--pink-0);border:1px solid var(--line);
   transition:border-color .2s, background .2s;
@@ -164,7 +168,7 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
 .live-status{font-size:11px;padding:4px 10px;border-radius:9px;flex-shrink:0;font-weight:700}
 .live-status.on{background:rgba(255,105,135,.15);color:var(--rose-dd);animation:pulse 2s ease-in-out infinite}
 .live-status.off{background:var(--pink-1);color:var(--ink-2)}
-.live-act{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+
 /* 优化:触控目标 30px→34px */
 .icon-btn{
   width:34px;height:34px;border-radius:10px;border:none;background:var(--pink-1);color:var(--ink-2);
@@ -858,7 +862,8 @@ function renderList(){
     updateBadge(0);
     return;
   }
-  var sorted = subs.slice().sort(function(a,b){ return b.liveStatus - a.liveStatus; });
+  applyPinned();
+  var sorted = subs.slice().sort(function(a,b){ if((a.liveStatus||0) !== (b.liveStatus||0)) return (b.liveStatus||0) - (a.liveStatus||0); if(!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1; return 0; });
   var liveCount = 0, html = '';
   for(var i = 0; i < sorted.length; i++){
     var s = sorted[i];
@@ -872,17 +877,49 @@ function renderList(){
       ? '<span class="live-status on">直播中</span>'
       : '<span class="live-status off">未开播</span>';
     var titleHtml = s.title ? '<div class="live-title">' + escHtml(s.title) + '</div>' : '';
-    html += '<div class="live-item' + (s.liveStatus === 1 ? ' live-on' : '') + '" data-id="' + escHtml(s.id) + '">'
-      + '<div class="avatar-wrap">' + avatarHtml + '<span class="live-dot-badge"></span></div>'
+    var liveUrl = s.platform === 'bilibili' ? 'https://live.bilibili.com/' + s.roomId : 'https://live.douyin.com/' + s.roomId;
+    html += '<div class="live-item' + (s.pinned ? ' pinned' : '') + (s.liveStatus === 1 ? ' live-on' : '') + '" data-id="' + escHtml(s.id) + '">'
+      + '<div class="avatar-wrap" style="cursor:pointer" onclick="window.open(\'' + liveUrl + '\', \'_blank\')">' + avatarHtml + '<span class="live-dot-badge"></span></div>'
       + '<div class="live-info"><div class="live-name">' + escHtml(name) + '</div>' + titleHtml + '</div>'
       + statusHtml
       + '<div class="live-act">'
+      + '<div class="act-left">'
       + '<button class="icon-btn remark" data-id="' + escHtml(s.id) + '" title="备注">✎</button>'
-      + '<button class="icon-btn del" data-id="' + escHtml(s.id) + '" title="删除">✕</button>'
+      + '<button class="icon-btn copy" onclick="copyLiveLink(this)" data-url="' + liveUrl + '" title="复制链接">📋</button>'
+      + '<button class="icon-btn pin" data-id="' + escHtml(s.id) + '" title="' + (s.pinned ? '取消置顶' : '置顶') + '">' + (s.pinned ? '📌' : '📍') + '</button>'
+      + '</div>'
+      + '<button class="icon-btn del" data-id="' + escHtml(s.id) + '" title="取消订阅">✕</button>'
       + '</div></div>';
   }
   list.innerHTML = html;
   updateBadge(liveCount);
+
+}
+function getPinnedIds(){ try{ return JSON.parse(localStorage.getItem('livePinned') || '[]'); }catch(e){ return []; } }
+function setPinnedIds(ids){ try{ localStorage.setItem('livePinned', JSON.stringify(ids)); }catch(e){} }
+function applyPinned(){
+  var ids = getPinnedIds();
+  for(var i = 0; i < subs.length; i++){ subs[i].pinned = ids.indexOf(subs[i].id) !== -1; }
+}
+function togglePin(id){
+  var ids = getPinnedIds();
+  var k = ids.indexOf(id);
+  if(k === -1) ids.push(id); else ids.splice(k, 1);
+  setPinnedIds(ids);
+  for(var i = 0; i < subs.length; i++){ if(subs[i].id === id) subs[i].pinned = (k === -1); }
+  renderList();
+}
+function copyLiveLink(btn){
+  var url = btn.getAttribute('data-url');
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(url).then(function(){ showToast('链接已复制~'); }).catch(function(){ fallbackCopy(url); });
+  } else { fallbackCopy(url); }
+}
+function fallbackCopy(url){
+  var ta = document.createElement('textarea');
+  ta.value = url; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); showToast('链接已复制~'); }catch(e){ showToast('复制失败'); }
+  document.body.removeChild(ta);
 }
 function updateBadge(count){
   var badge = document.getElementById('liveBadge');
@@ -920,7 +957,10 @@ function loadPushStatus(){
 }
 
 /* ---- 数据同步：把本地订阅推给服务端，拉取最新状态 ---- */
+var __syncing=false;
 function syncSubs(){
+  if(__syncing) return Promise.resolve();
+  __syncing=true;
   // 本地没有订阅时,先从服务器拉取(避免用空数据覆盖服务端已迁移的订阅)
   if(!localSubs || localSubs.length === 0){
     return fetch(API + '/api/subs', { headers: apiHeaders() })
@@ -935,7 +975,7 @@ function syncSubs(){
           renderList();
         }
       })
-      .catch(function(){});
+      .catch(function(){}).then(function(){ __syncing=false; });
   }
   return fetch(API + '/api/subs/sync', {
     method: 'POST',
@@ -956,7 +996,7 @@ function syncSubs(){
         showToast('订阅数量超出上限(' + d.maxLiveSubs + '个),已自动移除' + d.cappedCount + '个超出订阅,升级卡密可增加上限');
       }
     }
-  }).catch(function(){});
+  }).catch(function(){}).then(function(){ __syncing=false; });
 }
 
 /* ---- 添加订阅 ---- */
@@ -1014,7 +1054,10 @@ updateHint();
 document.getElementById('liveList').addEventListener('click', function(e){
   var del = e.target.closest('.icon-btn.del');
   var rem = e.target.closest('.icon-btn.remark');
-  if(del){
+  var pin = e.target.closest('.icon-btn.pin');
+  if(pin){
+    togglePin(pin.getAttribute('data-id'));
+  } else if(del){
     var id = del.getAttribute('data-id');
     if(!confirm('确定取消订阅该主播吗？')) return;
     localSubs = localSubs.filter(function(s){ return s.id !== id; });
@@ -1027,8 +1070,16 @@ document.getElementById('liveList').addEventListener('click', function(e){
     var cur = sub ? (sub.remark || '') : '';
     var nn = prompt('输入备注名（留空则使用主播昵称）：', cur);
     if(nn !== null){
-      var ls = localSubs.find(function(s){ return s.id === rid; });
-      if(ls){ ls.remark = nn.trim(); saveLocal(); syncSubs(); showToast('备注已更新'); }
+      var newRemark = nn.trim();
+      fetch(API + '/api/subs/' + encodeURIComponent(rid) + '/remark', {
+        method: 'PATCH', headers: apiHeaders(), body: JSON.stringify({ remark: newRemark })
+      }).then(function(r){ return r.json(); }).then(function(d){
+        if(d.success){
+          var s0 = subs.find(function(s){ return s.id === rid; }); if(s0) s0.remark = newRemark;
+          var l0 = localSubs.find(function(s){ return s.id === rid; }); if(l0) l0.remark = newRemark;
+          saveLocal(); renderList(); showToast('备注已更新');
+        } else { showToast(d.error || '备注修改失败'); }
+      }).catch(function(){ showToast('网络错误，备注修改失败'); });
     }
   }
 });
@@ -1082,7 +1133,7 @@ function connectSSE(){
 }
 
 /* ---- 公告横幅 ---- */
-function showAnnouncement(){var key="announcement_20260920";if(localStorage.getItem(key))return;var bar=document.getElementById("announcementBar");if(!bar)return;var ds="2026-09-20";var txt=document.getElementById("announcementText");if(txt)txt.textContent="["+ds+"] 试用订阅超出上限的bug已修改，但现已超出上限的订阅数据没有取消，欢迎大家体验后订阅年卡~";bar.style.display="flex";document.getElementById("announcementClose").onclick=function(){bar.style.display="none";localStorage.setItem(key,"1");};}
+function showAnnouncement(){var key="announcement_20261013";if(localStorage.getItem(key))return;var bar=document.getElementById("announcementBar");if(!bar)return;var ds="2026-10-13";var txt=document.getElementById("announcementText");if(txt)txt.textContent="["+ds+"] 近期更新了置顶订阅、复制直播间链接、点击直播间头像跳转功能，快来体验吧~";bar.style.display="flex";document.getElementById("announcementClose").onclick=function(){bar.style.display="none";localStorage.setItem(key,"1");};}
 
 /* ---- 卡密授权 ---- */
 var currentAuth = null;
@@ -1576,4 +1627,4 @@ checkAuth(function(){
 });
 </script>
 
-</body></html>
+</body></html>
