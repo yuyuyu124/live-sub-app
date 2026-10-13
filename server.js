@@ -435,11 +435,18 @@ async function checkOneRoom(platform, roomId) {
           console.log('[抖音检测] 疑似风控页 body前200=' + pageResp.body.substring(0, 200));
         }
       }
+      // 关键: 拿不到可信状态时返回 null, 上层会跳过本轮、保持原状态。
+      // 绝不能把风控/解析失败当成"下播", 否则会清掉 liveNotified 标记,
+      // 下轮检测恢复后误判为"新开播", 造成开播通知反复推送。
+      if (!room || room.status === null || room.status === undefined) {
+        console.log('[抖音检测] 状态不可信,保持原状态 roomId=' + roomId);
+        return null;
+      }
       return {
-        liveStatus: (room && room.status === 2) ? 1 : 0,
-        title: (room && room.title) || '',
-        avatar: (room && room.avatar) || '',
-        cover: '', uname: (room && room.nickname) || ''
+        liveStatus: room.status === 2 ? 1 : 0,
+        title: room.title || '',
+        avatar: room.avatar || '',
+        cover: '', uname: room.nickname || ''
       };
     }
   } catch (e) {}
@@ -450,6 +457,9 @@ async function checkOneRoom(platform, roomId) {
 // 检查所有订阅(按 room 去重 → 检测 → 按订阅者推送)
 // ============================================================
 let checking = false;
+// 下播确认计数(房间维度): 直播中突然检出"下播"时, 连续2轮都为0才确认真下播。
+// 防止抖音风控页/残缺页被误解析成 status:0, 导致状态来回翻转、开播通知重复推送。
+const offlineConfirm = {};
 async function checkAllLive() {
   if (checking) return;
   checking = true;
@@ -465,37 +475,54 @@ async function checkAllLive() {
         continue;
       }
 
+      // 防抖: 直播中突然检出"下播"时, 连续2轮都为0才确认真下播。
+      // 第1轮检出0先维持"开播"状态(不翻转/不清通知标记/不推下播),
+      // 避免抖音风控页或残缺页被误解析成 status:0 后又恢复, 造成开播通知重复推送。
+      const roomKey = room.platform + ':' + room.roomId;
+      let liveStatus = info.liveStatus;
+      if (info.liveStatus === 1) {
+        offlineConfirm[roomKey] = 0;
+      } else if (room.owners.some(function (o) { return (o.sub.liveStatus || 0) === 1; })) {
+        offlineConfirm[roomKey] = (offlineConfirm[roomKey] || 0) + 1;
+        if (offlineConfirm[roomKey] < 2) {
+          liveStatus = 1;
+          console.log('[直播检测] 房间 ' + roomKey + ' 首轮检出下播,维持开播待下轮确认');
+        } else {
+          console.log('[直播检测] 房间 ' + roomKey + ' 连续2轮检出下播,确认下播');
+        }
+      }
+
       // 遍历订阅该 room 的所有用户
       for (const owner of room.owners) {
         const userId = owner.userId;
         const sub = owner.sub;
         const prevStatus = sub.liveStatus || 0;
-        const changed = prevStatus !== info.liveStatus;
+        const changed = prevStatus !== liveStatus;
 
         // 单次直播期间只推一次:用 liveNotified 标记位
-        // - prevStatus=0 + info=1 且未通知过 → 触发提醒,并置 liveNotified=true
-        // - 启动时已在直播(liveFirstCheck + info=1) → 不推,但置 liveNotified=true
+        // - prevStatus=0 + liveStatus=1 且未通知过 → 触发提醒,并置 liveNotified=true
+        // - 启动时已在直播(liveFirstCheck + liveStatus=1) → 不推,但置 liveNotified=true
         //   避免下一次轮询仍把它当"未通知过"误推
         // - 下播 1→0 → 清 liveNotified=false,下次开播才能再推
         // - 持续 1→1 且已通知 → 跳过
-        const startLiveAndAlreadyNotified = liveFirstCheck && info.liveStatus === 1;
+        const startLiveAndAlreadyNotified = liveFirstCheck && liveStatus === 1;
         const shouldAlert = changed
-          && info.liveStatus === 1
+          && liveStatus === 1
           && prevStatus === 0
           && !sub.liveNotified
           && !startLiveAndAlreadyNotified;
 
         // 计算新的 liveNotified 值(随状态一起写入)
         let newNotified = !!sub.liveNotified;
-        if (info.liveStatus === 1 && (shouldAlert || startLiveAndAlreadyNotified)) {
+        if (liveStatus === 1 && (shouldAlert || startLiveAndAlreadyNotified)) {
           newNotified = true;
-        } else if (info.liveStatus === 0) {
+        } else if (liveStatus === 0) {
           newNotified = false;
         }
 
         // 更新该用户该 sub 的状态(含 liveNotified)
         store.updateSub(userId, sub.id, {
-          liveStatus: info.liveStatus,
+          liveStatus: liveStatus,
           liveNotified: newNotified,
           title: info.title || sub.title || '',
           uname: info.uname || sub.uname || '',
@@ -519,7 +546,7 @@ async function checkAllLive() {
             push.pushAlert(cfg.pushType, cfg.pushKey, title, desp);
           }
         }
-        if (changed && info.liveStatus === 0) {
+        if (changed && liveStatus === 0) {
           broadcastToUser(userId, 'live-ended', { id: sub.id });
           // 下播时主动推送(仅当该用户开了 endedAlert 且配置了推送)
           const prefs = store.getPreferences(userId);
@@ -535,7 +562,7 @@ async function checkAllLive() {
         }
         if (changed || liveFirstCheck) {
           broadcastToUser(userId, 'live-status-update', {
-            id: sub.id, liveStatus: info.liveStatus, title: info.title || '',
+            id: sub.id, liveStatus: liveStatus, title: info.title || '',
             uname: info.uname || '', cover: info.cover || '', avatar: info.avatar || ''
           });
         }
