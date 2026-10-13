@@ -426,13 +426,22 @@ async function checkOneRoom(platform, roomId) {
         // API 失败,回退到网页方式
         const pageResp = await douyinGet('https://live.douyin.com/' + roomId);
         const bodyLen = pageResp.body ? pageResp.body.length : 0;
-        const hasVerify = pageResp.body && (pageResp.body.indexOf('验证码') >= 0 || pageResp.body.indexOf('验证') >= 0 || pageResp.body.indexOf('verify') >= 0);
-        console.log('[抖音检测] 网页回退 roomId=' + roomId + ' body=' + bodyLen + ' hasVerify=' + hasVerify);
-        if (pageResp.body && bodyLen > 1000 && !hasVerify) {
+        // 精准风控判断: 只认真正的验证码特征。
+        // 注意: 不能用宽泛的 'verify' 关键词——正常页面 cookie 里有 s_v_web_id=verify_xxx,
+        // JS 变量里也常出现 verify, 会把正常页面误判成风控页, 导致 parseDouyinRoom 不执行。
+        const isRiskPage = bodyLen < 50000  // 正常页面都是几十万到上百万字符, 风控页只有几 KB
+          || (pageResp.body && (
+            pageResp.body.indexOf('verify.bytedance.com') >= 0     // 字节跳动验证码域名
+            || pageResp.body.indexOf('captcha.bdurl') >= 0         // captcha 脚本
+            || pageResp.body.indexOf('滑动验证') >= 0
+            || pageResp.body.indexOf('人机验证') >= 0
+          ));
+        console.log('[抖音检测] 网页回退 roomId=' + roomId + ' body=' + bodyLen + ' risk=' + isRiskPage);
+        if (pageResp.body && bodyLen > 1000 && !isRiskPage) {
           room = parseDouyinRoom(pageResp.body);
           console.log('[抖音检测] 解析结果=' + (room ? JSON.stringify({status: room.status, hasTitle: !!room.title}) : 'null'));
-        } else if (pageResp.body && bodyLen > 0) {
-          console.log('[抖音检测] 疑似风控页 body前200=' + pageResp.body.substring(0, 200));
+        } else if (isRiskPage) {
+          console.log('[抖音检测] 命中风控页 body前200=' + pageResp.body.substring(0, Math.min(200, bodyLen)));
         }
       }
       // 关键: 拿不到可信状态时返回 null, 上层会跳过本轮、保持原状态。
