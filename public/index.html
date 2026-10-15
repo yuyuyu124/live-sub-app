@@ -956,58 +956,41 @@ function loadPushStatus(){
     .catch(function(){});
 }
 
-/* ---- 数据同步：把本地订阅推给服务端，拉取最新状态 ---- */
-var __syncing=false;
+/* ---- 数据同步：只从服务器拉取最新订阅（不再推送本地列表，避免覆盖竞态和锁吞操作） ---- */
+var __syncing=false, __syncPending=false;
 function syncSubs(){
-  if(__syncing) return Promise.resolve();
-  __syncing=true;
-  // 合并: 服务器返回的为主, 保留前端刚添加但服务器暂未同步的订阅
+  if(__syncing){ __syncPending=true; return Promise.resolve(); }
+  __syncing=true; __syncPending=false;
+  // 合并: 服务器返回的为主; 仅保留最近60秒内本地新增的订阅(双保险,防添加瞬间被旧数据冲掉)
   function mergeSubs(serverList){
     var serverKeys = {};
     (serverList || []).forEach(function(s){ serverKeys[s.platform + ':' + s.roomId] = true; });
-    // 保留 subs 里有但服务器返回里没有的（doAdd 刚 push 的, 服务器可能因竞态丢了）
-    var keep = (subs || []).filter(function(s){ return !serverKeys[s.platform + ':' + s.roomId]; });
+    var keep = (subs || []).filter(function(s){
+      return s._localAddAt && (Date.now() - s._localAddAt < 60000) && !serverKeys[s.platform + ':' + s.roomId];
+    });
     return (serverList || []).concat(keep);
   }
-  // 本地没有订阅时,先从服务器拉取(避免用空数据覆盖服务端已迁移的订阅)
-  if(!localSubs || localSubs.length === 0){
-    return fetch(API + '/api/subs', { headers: apiHeaders() })
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        if(d.success && Array.isArray(d.subs)){
-          subs = mergeSubs(d.subs);
-          localSubs = subs.map(function(s){
-            return { id: s.id, platform: s.platform, roomId: s.roomId, remark: s.remark || '' };
-          });
-          saveLocal();
-          applyPinned();
-          renderList();
-        }
-      })
-      .catch(function(){}).then(function(){ __syncing=false; });
-  }
-  return fetch(API + '/api/subs/sync', {
-    method: 'POST',
-    headers: apiHeaders(),
-    body: JSON.stringify({ subs: localSubs })
-  }).then(function(r){ return r.json(); }).then(function(d){
-    if(d.success){
-      subs = mergeSubs(d.subs || []);
-      applyPinned();
-      renderList();
-      // 同步本地localStorage为合并后的列表
-      localSubs = subs.map(function(s){
-        return { id: s.id, platform: s.platform, roomId: s.roomId, remark: s.remark || '' };
-      });
-      saveLocal();
-      // 订阅数变化后更新用户信息卡片
-      if(typeof updateUserBoxWithAuth === 'function') updateUserBoxWithAuth();
-      // 如果服务器截断了超出配额的订阅,提示用户
-      if(d.capped && d.cappedCount > 0){
-        showToast('订阅数量超出上限(' + d.maxLiveSubs + '个),已自动移除' + d.cappedCount + '个超出订阅,升级卡密可增加上限');
+  return fetch(API + '/api/subs', { headers: apiHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.success && Array.isArray(d.subs)){
+        subs = mergeSubs(d.subs);
+        localSubs = subs.map(function(s){
+          return { id: s.id, platform: s.platform, roomId: s.roomId, remark: s.remark || '' };
+        });
+        saveLocal();
+        applyPinned();
+        renderList();
+        // 订阅数变化后更新用户信息卡片
+        if(typeof updateUserBoxWithAuth === 'function') updateUserBoxWithAuth();
       }
-    }
-  }).catch(function(){}).then(function(){ __syncing=false; });
+    })
+    .catch(function(){})
+    .then(function(){
+      __syncing=false;
+      // 同步期间有新请求进来被挡掉的,补跑一次,保证操作不丢
+      if(__syncPending){ __syncPending=false; setTimeout(syncSubs, 300); }
+    });
 }
 
 /* ---- 添加订阅 ---- */
@@ -1021,6 +1004,8 @@ function doAdd(input, btn){
   }).then(function(r){ return r.json(); }).then(function(d){
     if(d.success){
       // 立即更新 subs 变量（renderList 用的就是 subs），不等 syncSubs
+      // _localAddAt 标记本地新增时间,60秒内的拉取同步会保留它,防止被旧数据冲掉
+      d.sub._localAddAt = Date.now();
       subs.push(d.sub);
       localSubs.push({ id: d.sub.id, platform: d.sub.platform, roomId: d.sub.roomId, remark: '' });
       saveLocal();
@@ -1075,10 +1060,17 @@ document.getElementById('liveList').addEventListener('click', function(e){
   } else if(del){
     var id = del.getAttribute('data-id');
     if(!confirm('确定取消订阅该主播吗？')) return;
+    // 本地立即移除并重绘,点击马上生效
+    subs = subs.filter(function(s){ return s.id !== id; });
     localSubs = localSubs.filter(function(s){ return s.id !== id; });
     saveLocal();
-    syncSubs();
+    renderList();
     showToast('已取消订阅');
+    // 直接调单条删除接口,不依赖可能被锁挡掉的全量同步
+    fetch(API + '/api/subs/' + encodeURIComponent(id), { method: 'DELETE', headers: apiHeaders() })
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(!d || !d.success) showToast('取消订阅失败,请重试'); })
+      .catch(function(){ showToast('网络错误,取消订阅失败,请刷新页面重试'); });
   } else if(rem){
     var rid = rem.getAttribute('data-id');
     var sub = subs.find(function(s){ return s.id === rid; });

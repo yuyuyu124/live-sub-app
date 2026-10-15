@@ -1073,7 +1073,9 @@ function handleApi(req, res, pathname) {
       }
       store.setSubs(userId, next);
       if (next.length > 0 && !liveTimer) startLiveChecker();
-      await checkAllLive();
+      // 注意: 这里绝不能 await checkAllLive() —— 全量检测45+房间要1-2分钟,
+      // 会把同步请求拖死、前端同步锁一直占用,导致用户添加/删除操作被吞。
+      // 周期检测器每60秒自动跑,新添加的订阅在添加接口里已做过单房间即时检测。
       broadcastToUser(userId, 'live-subs-updated', {});
       const subs = store.getSubs(userId);
       const cappedCount = incoming.length - capped.length;
