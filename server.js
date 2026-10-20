@@ -24,6 +24,9 @@ const invite = require('./lib/invite');
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const POLL_INTERVAL = parseInt(process.env.LIVE_POLL_MS || '60000', 10);
 const STAGGER_MS = 2000;
+// B站单独轮询: 接口快(约0.2秒/房间)且不涉及风控, 可以高频检查
+const BILI_POLL_INTERVAL = parseInt(process.env.BILI_POLL_MS || '20000', 10);
+const BILI_STAGGER_MS = 150;
 
 // 管理员 Token（用于管理后台）
 // 固定默认密码,避免重启后随机变化导致无法登录
@@ -40,8 +43,8 @@ function douyinUrl(pathAndQuery) {
 }
 
 const WEIBO_POLL_INTERVAL = parseInt(process.env.WEIBO_POLL_MS || '90000', 10);
-let liveTimer = null;
-let liveFirstCheck = true;
+let liveTimer = null, biliTimer = null;
+let liveFirstCheck = true, biliFirstCheck = true;
 let weiboTimer = null;
 let weiboFirstCheck = true;
 let sseClients = [];   // [{ res, userId }]
@@ -463,24 +466,35 @@ async function checkOneRoom(platform, roomId) {
 }
 
 // ============================================================
-// 检查所有订阅(按 room 去重 → 检测 → 按订阅者推送)
+// 检查订阅(按 room 去重 → 检测 → 按订阅者推送)
+// 抖音与B站分开轮询:
+//   抖音单房间要1-2秒且必须限速防风控, B站接口约0.2秒且无风控。
+//   以前两者混在一个队列里串行跑, B站房间排在几十个抖音房间后面,
+//   一轮要4-5分钟才轮到, 所以B站开播提醒特别慢。
+//   拆开后两条线各自独立跑, B站20秒一轮、抖音60秒一轮。
 // ============================================================
-let checking = false;
+const checkingFlags = { douyin: false, bilibili: false };
 // 下播确认计数(房间维度): 直播中突然检出"下播"时, 连续2轮都为0才确认真下播。
 // 防止抖音风控页/残缺页被误解析成 status:0, 导致状态来回翻转、开播通知重复推送。
 const offlineConfirm = {};
-async function checkAllLive() {
-  if (checking) return;
-  checking = true;
+
+async function checkRooms(platform) {
+  if (checkingFlags[platform]) return;
+  checkingFlags[platform] = true;
   try {
-    const rooms = store.getAllSubsGroupedByRoom();
+    const all = store.getAllSubsGroupedByRoom();
+    const rooms = all.filter(function (r) { return r.platform === platform; });
     if (rooms.length === 0) return;
+
+    const stagger = platform === 'bilibili' ? BILI_STAGGER_MS : STAGGER_MS;
+    const firstCheck = platform === 'bilibili' ? biliFirstCheck : liveFirstCheck;
+    let anyChanged = false;
 
     for (let i = 0; i < rooms.length; i++) {
       const room = rooms[i];
       const info = await checkOneRoom(room.platform, room.roomId);
       if (!info) {
-        if (i < rooms.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
+        if (i < rooms.length - 1) await new Promise(function (r) { setTimeout(r, stagger); });
         continue;
       }
 
@@ -507,14 +521,15 @@ async function checkAllLive() {
         const sub = owner.sub;
         const prevStatus = sub.liveStatus || 0;
         const changed = prevStatus !== liveStatus;
+        if (changed || firstCheck) anyChanged = true;
 
         // 单次直播期间只推一次:用 liveNotified 标记位
         // - prevStatus=0 + liveStatus=1 且未通知过 → 触发提醒,并置 liveNotified=true
-        // - 启动时已在直播(liveFirstCheck + liveStatus=1) → 不推,但置 liveNotified=true
+        // - 启动时已在直播(firstCheck + liveStatus=1) → 不推,但置 liveNotified=true
         //   避免下一次轮询仍把它当"未通知过"误推
         // - 下播 1→0 → 清 liveNotified=false,下次开播才能再推
         // - 持续 1→1 且已通知 → 跳过
-        const startLiveAndAlreadyNotified = liveFirstCheck && liveStatus === 1;
+        const startLiveAndAlreadyNotified = firstCheck && liveStatus === 1;
         const shouldAlert = changed
           && liveStatus === 1
           && prevStatus === 0
@@ -569,20 +584,27 @@ async function checkAllLive() {
             }
           }
         }
-        if (changed || liveFirstCheck) {
+        if (changed || firstCheck) {
           broadcastToUser(userId, 'live-status-update', {
             id: sub.id, liveStatus: liveStatus, title: info.title || '',
             uname: info.uname || '', cover: info.cover || '', avatar: info.avatar || ''
           });
         }
       }
-      if (i < rooms.length - 1) await new Promise(function (r) { setTimeout(r, STAGGER_MS); });
+      if (i < rooms.length - 1) await new Promise(function (r) { setTimeout(r, stagger); });
     }
-    liveFirstCheck = false;
-    broadcastAll('live-subs-updated', {});
+
+    if (platform === 'bilibili') biliFirstCheck = false; else liveFirstCheck = false;
+    // 只在状态真有变化时才通知前端刷新, 避免B站高频轮询导致页面频繁重绘
+    if (anyChanged) broadcastAll('live-subs-updated', {});
   } finally {
-    checking = false;
+    checkingFlags[platform] = false;
   }
+}
+
+// 手动"立即检查"和兼容旧调用: 两个平台并行跑,互不阻塞
+function checkAllLive() {
+  return Promise.all([checkRooms('douyin'), checkRooms('bilibili')]);
 }
 
 // ============================================================
@@ -1072,7 +1094,8 @@ function handleApi(req, res, pathname) {
         });
       }
       store.setSubs(userId, next);
-      if (next.length > 0 && !liveTimer) startLiveChecker();
+      // 不判断 liveTimer: 只有B站订阅时 liveTimer(抖音线)可能没启动,也要拉起B站线
+      if (next.length > 0) startLiveChecker();
       // 注意: 这里绝不能 await checkAllLive() —— 全量检测45+房间要1-2分钟,
       // 会把同步请求拖死、前端同步锁一直占用,导致用户添加/删除操作被吞。
       // 周期检测器每60秒自动跑,新添加的订阅在添加接口里已做过单房间即时检测。
@@ -1120,7 +1143,7 @@ function handleApi(req, res, pathname) {
         sub.uname = info.uname || ''; sub.avatar = info.avatar || ''; sub.cover = info.cover || '';
       }
       store.addSub(userId, sub);
-      if (store.getSubs(userId).length === 1 && !liveTimer) startLiveChecker();
+      if (store.getSubs(userId).length === 1) startLiveChecker();
       broadcastToUser(userId, 'live-subs-updated', {});
       return sendJson(res, 200, { success: true, sub: sub });
     });
@@ -1307,16 +1330,34 @@ function handleRequest(req, res) {
 // 启动
 // ============================================================
 function startLiveChecker() {
-  if (liveTimer) return;
-  store.load();
-  const rooms = store.getAllSubsGroupedByRoom();
-  if (rooms.length > 0) setTimeout(checkAllLive, 3000);
-  liveTimer = setInterval(function () {
-    const rooms2 = store.getAllSubsGroupedByRoom();
-    if (rooms2.length > 0) checkAllLive();
-  }, POLL_INTERVAL);
+  // 抖音线: 慢但必须限速防风控
+  if (!liveTimer) {
+    store.load();
+    const rooms = store.getAllSubsGroupedByRoom();
+    if (rooms.some(function (r) { return r.platform === 'douyin'; })) {
+      setTimeout(function () { checkRooms('douyin'); }, 3000);
+    }
+    liveTimer = setInterval(function () {
+      const r2 = store.getAllSubsGroupedByRoom();
+      if (r2.some(function (r) { return r.platform === 'douyin'; })) checkRooms('douyin');
+    }, POLL_INTERVAL);
+  }
+  // B站线: 独立高频轮询, 不再排在抖音房间后面等
+  if (!biliTimer) {
+    const roomsB = store.getAllSubsGroupedByRoom();
+    if (roomsB.some(function (r) { return r.platform === 'bilibili'; })) {
+      setTimeout(function () { checkRooms('bilibili'); }, 1500);
+    }
+    biliTimer = setInterval(function () {
+      const r2 = store.getAllSubsGroupedByRoom();
+      if (r2.some(function (r) { return r.platform === 'bilibili'; })) checkRooms('bilibili');
+    }, BILI_POLL_INTERVAL);
+  }
 }
-function stopLiveChecker() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
+function stopLiveChecker() {
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  if (biliTimer) { clearInterval(biliTimer); biliTimer = null; }
+}
 
 function startWeiboChecker() {
   if (weiboTimer) return;
