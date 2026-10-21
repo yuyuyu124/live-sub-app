@@ -91,6 +91,15 @@ async function httpGet(urlStr, options) {
   return { body: body, statusCode: resp.status, headers: resp.headers, finalUrl: resp.url || urlStr };
 }
 
+// 带超时的 fetch：超过 timeoutMs 就主动中断，避免单个房间响应慢拖住整条串行检测队列
+function fetchWithTimeout(url, options, timeoutMs) {
+  options = options || {};
+  const controller = new AbortController();
+  const timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+  options.signal = controller.signal;
+  return fetch(url, options).finally(function () { clearTimeout(timer); });
+}
+
 async function liveReq(urlStr, options) {
   const r = await httpGet(urlStr, options);
   try { return JSON.parse(r.body.trim()); } catch (e) { throw new Error('parse error'); }
@@ -105,14 +114,14 @@ async function getRealTtwid() {
     return douyinTtwidCache.value;
   }
   try {
-    const resp = await fetch(douyinUrl('/'), {
+    const resp = await fetchWithTimeout(douyinUrl('/'), {
       headers: {
         'User-Agent': UA,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'zh-CN,zh;q=0.9'
       },
       redirect: 'manual'
-    });
+    }, 10000);
     var setCookies = (resp.headers.getSetCookie ? resp.headers.getSetCookie() : (resp.headers.raw ? (resp.headers.raw()['set-cookie'] || []) : [resp.headers.get('set-cookie') || '']));
     var ttwid = '';
     var msToken = '';
@@ -160,7 +169,7 @@ async function douyinGetAPI(roomId) {
     'sec-fetch-site': 'same-origin'
   };
   try {
-    var resp = await fetch(apiUrl, { headers: headers, redirect: 'follow' });
+    var resp = await fetchWithTimeout(apiUrl, { headers: headers, redirect: 'follow' }, 10000);
     var body = await resp.text();
     var data = JSON.parse(body);
     // 检查多种可能的响应格式
@@ -222,7 +231,7 @@ async function douyinGet(urlStr) {
     'sec-fetch-user': '?1', 'Upgrade-Insecure-Requests': '1', 'Cookie': cookie
   };
   try {
-    const resp = await fetch(requestUrl, { headers: headers, redirect: 'follow' });
+    const resp = await fetchWithTimeout(requestUrl, { headers: headers, redirect: 'follow' }, 10000);
     const body = await resp.text();
     return { body: body, statusCode: resp.status, finalUrl: resp.url || urlStr };
   } catch (e) { return { body: '', statusCode: 0, finalUrl: urlStr }; }
