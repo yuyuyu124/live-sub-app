@@ -476,10 +476,10 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
     <div class="add-hint" id="quickHint">B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345</div>
     <div class="add-divider">或粘贴完整链接</div>
     <div class="add-row">
-      <input type="text" class="text-input" id="linkInput" placeholder="粘贴 B站 / 抖音 直播间链接">
+      <input type="text" class="text-input" id="linkInput" placeholder="粘贴 B站 / 抖音 直播间链接，或抖音号">
       <button class="btn-primary" id="linkAddBtn">添加</button>
     </div>
-    <div class="add-hint">支持：B站/抖音完整链接、房间号、抖音短链 v.douyin.com/xxx</div>
+    <div class="add-hint">支持：B站/抖音完整链接、房间号、抖音号、抖音短链 v.douyin.com/xxx</div>
   </div>
 
   <!-- 订阅列表 -->
@@ -1043,8 +1043,8 @@ function updateHint(){
     document.getElementById('quickInput').placeholder = '输入B站房间号';
     hint.textContent = 'B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345';
   } else {
-    document.getElementById('quickInput').placeholder = '输入抖音直播间链接';
-    hint.textContent = '仅支持通过网页版抖音获取直播间链接';
+    document.getElementById('quickInput').placeholder = '输入抖音号或直播间链接';
+    hint.textContent = '抖音号就是直播间链接里那串数字/字母；点分享-复制链接，整段粘贴也可以（个人主页不支持）';
   }
 }
 platformSel.addEventListener('change', updateHint);

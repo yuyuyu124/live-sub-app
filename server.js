@@ -236,16 +236,21 @@ function parseLiveInput(input) {
   if (!input) return null;
   let m = input.match(/live\.bilibili\.com\/(\d+)/);
   if (m) return { platform: 'bilibili', roomId: m[1] };
+  // B站房间号都是短号(≤10位); 11位以上的纯数字是抖音web_rid, 直接当抖音号用
   if (/^\d{1,10}$/.test(input)) return { platform: 'bilibili', roomId: input };
-  m = input.match(/live\.douyin\.com\/(\d+)/);
+  if (/^\d{11,20}$/.test(input)) return { platform: 'douyin', roomId: input };
+  // 直播间链接的路径段就是web_rid(数字或字母都有), 直接取用, 不用再抓页面
+  m = input.match(/live\.douyin\.com\/([a-zA-Z0-9_.-]{2,30})/);
   if (m) return { platform: 'douyin', roomId: m[1] };
   m = input.match(/douyin\.com\/(?:follow\/)?live\/(\d+)/);
   if (m) return { platform: 'douyin', roomId: m[1] };
   if (/v\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
   if (/live\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
-  if (/douyin\.com\/user\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
+  // 个人主页不含直播数据(实测抖音主页是纯前端渲染, 服务端HTML里没有任何房间字段), 这里只做提示
+  if (/douyin\.com\/user\//.test(input)) return { platform: 'douyin', needResolve: true, url: input, isProfile: true };
+  // 抖音号本身就是 live.douyin.com 的路径标识(web_rid), 解析不到页面数据时可直接使用
   if (/^[a-zA-Z][a-zA-Z0-9_.-]{1,29}$/.test(input)) {
-    return { platform: 'douyin', needResolve: true, url: 'https://live.douyin.com/' + encodeURIComponent(input) };
+    return { platform: 'douyin', needResolve: true, url: 'https://live.douyin.com/' + encodeURIComponent(input), fallbackId: input };
   }
   return null;
 }
@@ -1120,8 +1125,15 @@ function handleApi(req, res, pathname) {
       const parsed = parseLiveInput(body.input || '');
       if (!parsed) return sendJson(res, 200, { success: false, error: '无法识别链接,请输入B站或抖音直播间链接/房间号' });
       if (parsed.needResolve) {
+        if (parsed.isProfile) {
+          return sendJson(res, 200, { success: false, error: '抖音个人主页查不到开播状态,请改用抖音号或直播间链接(在抖音里点分享-复制链接,整段粘贴也可以)' });
+        }
         try { parsed.roomId = await resolveDouyinRoomId(parsed.url); }
-        catch (e) { return sendJson(res, 200, { success: false, error: '抖音链接解析失败,请尝试直接输入房间号' }); }
+        catch (e) {
+          // 抖音号本身就是直播间标识, 网页解析不到时直接用输入的抖音号
+          if (parsed.fallbackId) parsed.roomId = parsed.fallbackId;
+          else return sendJson(res, 200, { success: false, error: '抖音链接解析失败,请直接输入抖音号或直播间链接' });
+        }
       }
       const subs = store.getSubs(userId);
       const existing = subs.find(function (s) { return s.platform === parsed.platform && s.roomId === parsed.roomId; });
