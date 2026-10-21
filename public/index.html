@@ -501,24 +501,6 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
       <label class="switch"><input type="checkbox" id="soundSwitch" checked=""><span class="slider"></span></label>
     </div>
     <div class="setting-item">
-      <div class="setting-info">
-        <div class="si-title">免打扰时段</div>
-        <div class="si-desc">该时段内不弹开播提醒（仅浏览器内提醒免打扰，不涉及推送功能）</div>
-      </div>
-      <div class="time-row">
-        <input type="time" id="dndStart" value="00:00" aria-label="免打扰开始时间">
-        <span style="color:var(--ink-3);font-size:12px">~</span>
-        <input type="time" id="dndEnd" value="08:00" aria-label="免打扰结束时间">
-      </div>
-    </div>
-    <div class="setting-item">
-      <div class="setting-info">
-        <div class="si-title">系统通知</div>
-        <div class="si-desc">开播时在通知栏弹出提醒</div>
-      </div>
-      <button class="btn-soft" id="notifyBtn">开启通知</button>
-    </div>
-    <div class="setting-item">
       <a class="push-link" href="/settings.html">
         <div class="setting-info">
           <div class="si-title">微信/手机推送</div>
@@ -533,7 +515,7 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
 
   <!-- 优化:合并为零散两块为统一页脚 -->
   <footer class="page-footer">
-    <div>每 60 秒自动检测一次开播状态<br>如需弹窗声音通知请保持本页面打开（PC 端保持窗口在后台即可）</div>
+    <div>开播状态轮询为五分钟一次<br>需要通知请在设置中配置推送功能~</div>
     <div class="author">作者：小红书号 guanlingV · 有问题可私信，看到就会回</div>
   </footer>
 </div>
@@ -643,8 +625,6 @@ var subs = [];          // 服务端返回的富数据（含直播状态）
 var localSubs = [];     // 手机本地订阅（localStorage 持久化，服务端重启不丢）
 var alertStates = {};   // { id: { level, timers:[], confirmed, banner } }
 var soundOn = true;
-var dndStart = '00:00', dndEnd = '08:00';
-var notifyGranted = false;
 
 function escHtml(s){return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
@@ -672,35 +652,15 @@ function loadSettings(){
   try{
     var s = JSON.parse(localStorage.getItem('liveSettings') || '{}');
     if(s.sound !== undefined) soundOn = !!s.sound;
-    if(s.dndStart) dndStart = s.dndStart;
-    if(s.dndEnd) dndEnd = s.dndEnd;
     document.getElementById('soundSwitch').checked = soundOn;
-    document.getElementById('dndStart').value = dndStart;
-    document.getElementById('dndEnd').value = dndEnd;
   }catch(e){}
 }
 function saveSettings(){
-  localStorage.setItem('liveSettings', JSON.stringify({ sound: soundOn, dndStart: dndStart, dndEnd: dndEnd }));
+  localStorage.setItem('liveSettings', JSON.stringify({ sound: soundOn }));
 }
 document.getElementById('soundSwitch').addEventListener('change', function(){
   soundOn = this.checked; saveSettings();
 });
-document.getElementById('dndStart').addEventListener('change', function(){ dndStart = this.value; saveSettings(); });
-document.getElementById('dndEnd').addEventListener('change', function(){ dndEnd = this.value; saveSettings(); });
-
-/* ---- 免打扰判断 ---- */
-function inDnd(){
-  try{
-    var now = new Date();
-    var cur = now.getHours() * 60 + now.getMinutes();
-    var s = dndStart.split(':').map(Number), e = dndEnd.split(':').map(Number);
-    var sm = s[0]*60 + s[1], em = e[0]*60 + e[1];
-    if(sm === em) return false;
-    if(sm < em) return cur >= sm && cur < em;
-    return cur >= sm || cur < em;  // 跨天
-  }catch(err){ return false; }
-}
-
 /* ---- 提示音（Web Audio 现算 880→1320Hz）---- */
 var audioCtx = null;
 function playAlertSound(){
@@ -717,34 +677,6 @@ function playAlertSound(){
     gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
     osc.start(); osc.stop(audioCtx.currentTime + 0.4);
-  }catch(e){}
-}
-
-/* ---- 系统通知 ---- */
-function requestNotify(){
-  if(!('Notification' in window)){ showToast('当前浏览器不支持系统通知'); return; }
-  Notification.requestPermission().then(function(p){
-    notifyGranted = p === 'granted';
-    document.getElementById('notifyBtn').textContent = notifyGranted ? '已开启' : '开启通知';
-    if(notifyGranted) showToast('系统通知已开启');
-    else showToast('通知权限未开启');
-  });
-}
-document.getElementById('notifyBtn').addEventListener('click', requestNotify);
-function showSystemNotif(sub){
-  if(!notifyGranted) return;
-  if(!('Notification' in window)) return;
-  try{
-    var n = new Notification('开播提醒 ' + (sub.uname || ''), {
-      body: sub.title || '正在直播中',
-      icon: sub.avatar || 'icon.svg',
-      tag: 'live-' + sub.id
-    });
-    n.onclick = function(){
-      window.focus();
-      openLive(sub);
-      confirmAlert(sub.id);
-    };
   }catch(e){}
 }
 
@@ -800,10 +732,8 @@ function startFlash(sub){
   showAlertBanner(sub, true);
 }
 function triggerAlert(sub){
-  if(inDnd()) return;
   if(alertStates[sub.id]) return;
   alertStates[sub.id] = { level: 1, timers: [], confirmed: false, banner: false };
-  showSystemNotif(sub);
   showAlertBanner(sub, false);
   var t3 = setTimeout(function(){
     if(alertStates[sub.id] && !alertStates[sub.id].confirmed) startFlash(sub);
