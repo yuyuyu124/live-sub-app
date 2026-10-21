@@ -470,16 +470,10 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
         <option value="bilibili">B站</option>
         <option value="douyin">抖音</option>
       </select>
-      <input type="text" class="text-input" id="quickInput" placeholder="输入B站房间号">
+      <input type="text" class="text-input" id="quickInput" placeholder="输入B站房间号或粘贴直播链接">
       <button class="btn-primary" id="quickAddBtn">添加</button>
     </div>
     <div class="add-hint" id="quickHint">B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345</div>
-    <div class="add-divider">或粘贴完整链接</div>
-    <div class="add-row">
-      <input type="text" class="text-input" id="linkInput" placeholder="粘贴 B站 / 抖音 直播间链接，或抖音号">
-      <button class="btn-primary" id="linkAddBtn">添加</button>
-    </div>
-    <div class="add-hint">支持：B站/抖音完整链接、房间号、抖音号、抖音短链 v.douyin.com/xxx</div>
   </div>
 
   <!-- 订阅列表 -->
@@ -1026,25 +1020,18 @@ document.getElementById('quickAddBtn').addEventListener('click', function(){
   doAdd(link, this);
   document.getElementById('quickInput').value = '';
 });
-document.getElementById('linkAddBtn').addEventListener('click', function(){
-  var v = document.getElementById('linkInput').value.trim();
-  if(!v) return;
-  doAdd(v, this);
-  document.getElementById('linkInput').value = '';
-});
 document.getElementById('quickInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') document.getElementById('quickAddBtn').click(); });
-document.getElementById('linkInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') document.getElementById('linkAddBtn').click(); });
 
 /* 平台切换提示 */
 var platformSel = document.getElementById('platformSel');
 function updateHint(){
   var hint = document.getElementById('quickHint');
   if(platformSel.value === 'bilibili'){
-    document.getElementById('quickInput').placeholder = '输入B站房间号';
+    document.getElementById('quickInput').placeholder = '输入B站房间号或粘贴直播链接';
     hint.textContent = 'B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345';
   } else {
     document.getElementById('quickInput').placeholder = '输入抖音号或直播间链接';
-    hint.textContent = '抖音号就是直播间链接里那串数字/字母；点分享-复制链接，整段粘贴也可以（个人主页不支持）';
+    hint.textContent = '抖音号为用户主页抖音号，直播间链接格式为live.douyin.com/id，非分享链接！';
   }
 }
 platformSel.addEventListener('change', updateHint);
