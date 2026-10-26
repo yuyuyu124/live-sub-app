@@ -962,7 +962,7 @@ function updateHint(){
     hint.textContent = 'B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345';
   } else if(platformSel.value === 'kuaishou'){
     document.getElementById('quickInput').placeholder = '输入快手用户ID或粘贴直播间链接';
-    hint.textContent = '快手用户ID以3x开头，或直接粘贴 live.kuaishou.com/u/xxx 或个人主页链接';
+    hint.textContent = '快手用户ID以3x开头，若为自定义id则输入live.kuaishou.com/u/用户id';
   } else {
     document.getElementById('quickInput').placeholder = '输入抖音号或直播间链接';
     hint.textContent = '抖音号为用户主页抖音号，直播间链接格式为live.douyin.com/id，非分享链接！';
