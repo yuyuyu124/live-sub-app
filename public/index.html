@@ -402,7 +402,7 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
         <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2"></path><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"></circle><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path><path d="M19.1 4.9a10 10 0 0 1 0 14.2"></path></svg></span>
         直播订阅
       </div>
-      <div class="sub">B站 · 抖音 开播提醒</div>
+      <div class="sub">B站 · 抖音 · 快手 开播提醒</div>
     </div>
     <div class="header-side">
       <div class="live-badge" id="liveBadge"><span class="dot"></span><span id="liveBadgeCount">0</span> 直播中</div>
@@ -469,6 +469,7 @@ header .sub{font-size:12px;font-weight:600;opacity:.95;margin-top:1px;text-shado
       <select class="platform-select" id="platformSel" aria-label="选择平台">
         <option value="bilibili">B站</option>
         <option value="douyin">抖音</option>
+        <option value="kuaishou">快手</option>
       </select>
       <input type="text" class="text-input" id="quickInput" placeholder="输入B站房间号或粘贴直播链接">
       <button class="btn-primary" id="quickAddBtn">添加</button>
@@ -682,7 +683,7 @@ function playAlertSound(){
 
 /* ---- 打开直播间 ---- */
 function openLive(sub){
-  var url = sub.platform === 'bilibili' ? 'https://live.bilibili.com/' + sub.roomId : 'https://live.douyin.com/' + sub.roomId;
+  var url = sub.platform === 'bilibili' ? 'https://live.bilibili.com/' + sub.roomId : (sub.platform === 'kuaishou' ? 'https://live.kuaishou.com/u/' + sub.roomId : 'https://live.douyin.com/' + sub.roomId);
   window.open(url, '_blank');
 }
 
@@ -693,12 +694,12 @@ function showAlertBanner(sub, persist){
   if(st && st.confirmed) return;
   currentAlertId = sub.id;
   var banner = document.getElementById('alertBanner');
-  document.getElementById('alertPlatform').textContent = sub.platform === 'bilibili' ? 'B站直播' : '抖音直播';
-  document.getElementById('alertName').textContent = sub.remark || sub.uname || (sub.platform === 'bilibili' ? 'B站' : '抖音') + ' ' + sub.roomId;
+  document.getElementById('alertPlatform').textContent = sub.platform === 'bilibili' ? 'B站直播' : (sub.platform === 'kuaishou' ? '快手直播' : '抖音直播');
+  document.getElementById('alertName').textContent = sub.remark || sub.uname || (sub.platform === 'bilibili' ? 'B站' : (sub.platform === 'kuaishou' ? '快手' : '抖音')) + ' ' + sub.roomId;
   document.getElementById('alertTitle').textContent = sub.title || '正在直播中';
   var img = document.getElementById('alertImg'), ph = document.getElementById('alertPh');
   if(sub.avatar){ img.src = sub.avatar; img.style.display = 'block'; ph.style.display = 'none'; }
-  else { img.style.display = 'none'; ph.style.display = 'flex'; ph.textContent = sub.platform === 'bilibili' ? '📺' : '🎵'; }
+  else { img.style.display = 'none'; ph.style.display = 'flex'; ph.textContent = sub.platform === 'bilibili' ? '📺' : (sub.platform === 'kuaishou' ? '快' : '🎵'); }
   document.getElementById('alertLater').style.display = persist ? 'none' : 'block';
   document.getElementById('alertReceived').style.display = persist ? 'block' : 'none';
   document.getElementById('alertProgress').style.display = persist ? 'none' : 'block';
@@ -792,8 +793,8 @@ function renderList(){
   for(var i = 0; i < sorted.length; i++){
     var s = sorted[i];
     if(s.liveStatus === 1) liveCount++;
-    var icon = s.platform === 'bilibili' ? 'B' : 'D';
-    var name = s.remark || s.uname || (s.platform === 'bilibili' ? 'B站' : '抖音') + ' ' + s.roomId;
+    var icon = s.platform === 'bilibili' ? 'B' : (s.platform === 'kuaishou' ? '快' : 'D');
+    var name = s.remark || s.uname || (s.platform === 'bilibili' ? 'B站' : (s.platform === 'kuaishou' ? '快手' : '抖音')) + ' ' + s.roomId;
     var avatarHtml = s.avatar
       ? '<img class="live-avatar" src="' + escHtml(s.avatar) + '" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div class="avatar-ph" style="display:none">' + icon + '</div>'
       : '<div class="avatar-ph">' + icon + '</div>';
@@ -801,7 +802,7 @@ function renderList(){
       ? '<span class="live-status on">直播中</span>'
       : '<span class="live-status off">未开播</span>';
     var titleHtml = s.title ? '<div class="live-title">' + escHtml(s.title) + '</div>' : '';
-    var liveUrl = s.platform === 'bilibili' ? 'https://live.bilibili.com/' + s.roomId : 'https://live.douyin.com/' + s.roomId;
+    var liveUrl = s.platform === 'bilibili' ? 'https://live.bilibili.com/' + s.roomId : (s.platform === 'kuaishou' ? 'https://live.kuaishou.com/u/' + s.roomId : 'https://live.douyin.com/' + s.roomId);
     html += '<div class="live-item' + (s.pinned ? ' pinned' : '') + (s.liveStatus === 1 ? ' live-on' : '') + '" data-id="' + escHtml(s.id) + '">'
       + '<div class="avatar-wrap" style="cursor:pointer" onclick="window.open(\'' + liveUrl + '\', \'_blank\')">' + avatarHtml + '<span class="live-dot-badge"></span></div>'
       + '<div class="live-info"><div class="live-name">' + escHtml(name) + '</div>' + titleHtml + '</div>'
@@ -959,6 +960,9 @@ function updateHint(){
   if(platformSel.value === 'bilibili'){
     document.getElementById('quickInput').placeholder = '输入B站房间号或粘贴直播链接';
     hint.textContent = 'B站房间号是直播间链接中的数字，如 live.bilibili.com/12345 中的 12345';
+  } else if(platformSel.value === 'kuaishou'){
+    document.getElementById('quickInput').placeholder = '输入快手用户ID或粘贴直播间链接';
+    hint.textContent = '快手用户ID以3x开头，或直接粘贴 live.kuaishou.com/u/xxx 或个人主页链接';
   } else {
     document.getElementById('quickInput').placeholder = '输入抖音号或直播间链接';
     hint.textContent = '抖音号为用户主页抖音号，直播间链接格式为live.douyin.com/id，非分享链接！';

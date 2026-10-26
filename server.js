@@ -27,6 +27,9 @@ const STAGGER_MS = 2000;
 // B站单独轮询: 接口快(约0.2秒/房间)且不涉及风控, 可以高频检查
 const BILI_POLL_INTERVAL = parseInt(process.env.BILI_POLL_MS || '20000', 10);
 const BILI_STAGGER_MS = 150;
+// 快手单独轮询: 页面服务端渲染(约0.3-0.5秒/房间), 60秒一轮
+const KUAISHOU_POLL_INTERVAL = parseInt(process.env.KUAISHOU_POLL_MS || '60000', 10);
+const KUAISHOU_STAGGER_MS = 500;
 
 // 管理员 Token（用于管理后台）
 // 固定默认密码,避免重启后随机变化导致无法登录
@@ -43,8 +46,8 @@ function douyinUrl(pathAndQuery) {
 }
 
 const WEIBO_POLL_INTERVAL = parseInt(process.env.WEIBO_POLL_MS || '90000', 10);
-let liveTimer = null, biliTimer = null;
-let liveFirstCheck = true, biliFirstCheck = true;
+let liveTimer = null, biliTimer = null, kuaishouTimer = null;
+let liveFirstCheck = true, biliFirstCheck = true, kuaishouFirstCheck = true;
 let weiboTimer = null;
 let weiboFirstCheck = true;
 let sseClients = [];   // [{ res, userId }]
@@ -238,6 +241,54 @@ async function douyinGet(urlStr) {
 }
 
 // ============================================================
+// 快手检测: 直播间页面是服务端渲染, 直接抓 HTML 就能拿到开播状态
+// ============================================================
+async function kuaishouGet(urlStr) {
+  const headers = {
+    'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9', 'Referer': 'https://live.kuaishou.com/'
+  };
+  try {
+    const resp = await fetchWithTimeout(urlStr, { headers: headers, redirect: 'follow' }, 10000);
+    const body = await resp.text();
+    return { body: body, statusCode: resp.status, finalUrl: resp.url || urlStr };
+  } catch (e) { return { body: '', statusCode: 0, finalUrl: urlStr }; }
+}
+
+function parseKuaishouRoom(html) {
+  if (!html || html.length < 1000) return null;
+  // 开播判定: liveroom.playList 数组里有 liveStream(带 .flv 推流地址)才算开播。
+  // 未开播时 playList 为空, 页面里不会有 liveStream 和 .flv 推流地址。
+  var hasLiveStream = html.indexOf('"liveStream"') >= 0;
+  var hasFlv = html.indexOf('.flv') >= 0;
+  var status = (hasLiveStream && hasFlv) ? 2 : 0;
+  var nickname = '';
+  var m = html.match(/<title[^>]*>([^<]+)<\/title>/);
+  if (m) nickname = m[1].replace(/-快手直播$/, '').trim();
+  var cover = '';
+  m = html.match(/"poster"\s*:\s*"([^"]+)"/);
+  if (m) cover = m[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/');
+  var title = '';
+  m = html.match(/"caption"\s*:\s*"([^"]{0,120})"/);
+  if (m) title = m[1];
+  if (!title) { m = html.match(/<meta name="description" content="([^"]*)"/); if (m) title = m[1]; }
+  return { status: status, title: title, nickname: nickname, avatar: '', cover: cover };
+}
+
+async function resolveKuaishouRoomId(shortUrl) {
+  const loadUrl = /^https?:\/\//.test(shortUrl) ? shortUrl : 'https://' + shortUrl;
+  const resp = await kuaishouGet(loadUrl);
+  const finalUrl = resp.finalUrl || loadUrl;
+  let m = finalUrl.match(/live\.kuaishou\.com\/u\/([a-zA-Z0-9_-]{3,40})/)
+       || finalUrl.match(/live\.kuaishou\.com\/([a-zA-Z0-9_-]{3,40})/)
+       || finalUrl.match(/kuaishou\.com\/profile\/([a-zA-Z0-9_-]{3,40})/);
+  if (m) return m[1];
+  m = (resp.body || '').match(/"principalId"\s*:\s*"([a-zA-Z0-9_-]{3,40})"/);
+  if (m) return m[1];
+  throw new Error('无法从快手链接解析出主播ID');
+}
+
+// ============================================================
 // 解析用户输入
 // ============================================================
 function parseLiveInput(input) {
@@ -255,6 +306,15 @@ function parseLiveInput(input) {
   if (m) return { platform: 'douyin', roomId: m[1] };
   if (/v\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
   if (/live\.douyin\.com\//.test(input)) return { platform: 'douyin', needResolve: true, url: input };
+  // 快手直播间/个人主页: 路径里的 id 就是直播间 principalId(3x开头), 直接取用即可
+  m = input.match(/live\.kuaishou\.com\/u\/([a-zA-Z0-9_-]{3,40})/);
+  if (m) return { platform: 'kuaishou', roomId: m[1] };
+  m = input.match(/live\.kuaishou\.com\/([a-zA-Z0-9_-]{3,40})/);
+  if (m) return { platform: 'kuaishou', roomId: m[1] };
+  m = input.match(/kuaishou\.com\/profile\/([a-zA-Z0-9_-]{3,40})/);
+  if (m) return { platform: 'kuaishou', roomId: m[1] };
+  if (/v\.kuaishou\.com\//.test(input)) return { platform: 'kuaishou', needResolve: true, url: input };
+  if (/^3x[a-zA-Z0-9_-]{8,40}$/.test(input)) return { platform: 'kuaishou', roomId: input };
   // 个人主页不含直播数据(实测抖音主页是纯前端渲染, 服务端HTML里没有任何房间字段), 这里只做提示
   if (/douyin\.com\/user\//.test(input)) return { platform: 'douyin', needResolve: true, url: input, isProfile: true };
   // 抖音号本身就是 live.douyin.com 的路径标识(web_rid), 解析不到页面数据时可直接使用
@@ -474,6 +534,26 @@ async function checkOneRoom(platform, roomId) {
         avatar: room.avatar || '',
         cover: '', uname: room.nickname || ''
       };
+    } else if (platform === 'kuaishou') {
+      const page = await kuaishouGet('https://live.kuaishou.com/u/' + roomId);
+      const bodyLen = page.body ? page.body.length : 0;
+      const isRisk = bodyLen < 1000 || (page.body && (
+        page.body.indexOf('验证码') >= 0 || page.body.indexOf('滑块') >= 0 || page.body.indexOf('captcha') >= 0
+      ));
+      console.log('[快手检测] roomId=' + roomId + ' body=' + bodyLen + ' risk=' + isRisk);
+      if (page.body && bodyLen > 1000 && !isRisk) {
+        const r = parseKuaishouRoom(page.body);
+        if (r && r.status !== null && r.status !== undefined) {
+          return {
+            liveStatus: r.status === 2 ? 1 : 0,
+            title: r.title || '',
+            avatar: r.avatar || '',
+            cover: r.cover || '', uname: r.nickname || ''
+          };
+        }
+        console.log('[快手检测] 状态不可信,保持原状态 roomId=' + roomId);
+      }
+      return null;
     }
   } catch (e) {}
   return null;
@@ -487,7 +567,7 @@ async function checkOneRoom(platform, roomId) {
 //   一轮要4-5分钟才轮到, 所以B站开播提醒特别慢。
 //   拆开后两条线各自独立跑, B站20秒一轮、抖音60秒一轮。
 // ============================================================
-const checkingFlags = { douyin: false, bilibili: false };
+const checkingFlags = { douyin: false, bilibili: false, kuaishou: false };
 // 下播确认计数(房间维度): 直播中突然检出"下播"时, 连续2轮都为0才确认真下播。
 // 防止抖音风控页/残缺页被误解析成 status:0, 导致状态来回翻转、开播通知重复推送。
 const offlineConfirm = {};
@@ -500,8 +580,8 @@ async function checkRooms(platform) {
     const rooms = all.filter(function (r) { return r.platform === platform; });
     if (rooms.length === 0) return;
 
-    const stagger = platform === 'bilibili' ? BILI_STAGGER_MS : STAGGER_MS;
-    const firstCheck = platform === 'bilibili' ? biliFirstCheck : liveFirstCheck;
+    const stagger = platform === 'bilibili' ? BILI_STAGGER_MS : (platform === 'kuaishou' ? KUAISHOU_STAGGER_MS : STAGGER_MS);
+    const firstCheck = platform === 'bilibili' ? biliFirstCheck : (platform === 'kuaishou' ? kuaishouFirstCheck : liveFirstCheck);
     let anyChanged = false;
 
     for (let i = 0; i < rooms.length; i++) {
@@ -608,7 +688,9 @@ async function checkRooms(platform) {
       if (i < rooms.length - 1) await new Promise(function (r) { setTimeout(r, stagger); });
     }
 
-    if (platform === 'bilibili') biliFirstCheck = false; else liveFirstCheck = false;
+    if (platform === 'bilibili') biliFirstCheck = false;
+    else if (platform === 'kuaishou') kuaishouFirstCheck = false;
+    else liveFirstCheck = false;
     // 只在状态真有变化时才通知前端刷新, 避免B站高频轮询导致页面频繁重绘
     if (anyChanged) broadcastAll('live-subs-updated', {});
   } finally {
@@ -618,7 +700,7 @@ async function checkRooms(platform) {
 
 // 手动"立即检查"和兼容旧调用: 两个平台并行跑,互不阻塞
 function checkAllLive() {
-  return Promise.all([checkRooms('douyin'), checkRooms('bilibili')]);
+  return Promise.all([checkRooms('douyin'), checkRooms('bilibili'), checkRooms('kuaishou')]);
 }
 
 // ============================================================
@@ -1132,16 +1214,20 @@ function handleApi(req, res, pathname) {
   if (method === 'POST' && parts[1] === 'subs' && parts.length === 2) {
     return readBody(req).then(async function (body) {
       const parsed = parseLiveInput(body.input || '');
-      if (!parsed) return sendJson(res, 200, { success: false, error: '无法识别链接,请输入B站或抖音直播间链接/房间号' });
+      if (!parsed) return sendJson(res, 200, { success: false, error: '无法识别链接,请输入B站/抖音/快手直播间链接或房间号' });
       if (parsed.needResolve) {
         if (parsed.isProfile) {
           return sendJson(res, 200, { success: false, error: '抖音个人主页查不到开播状态,请改用抖音号或直播间链接(在抖音里点分享-复制链接,整段粘贴也可以)' });
         }
-        try { parsed.roomId = await resolveDouyinRoomId(parsed.url); }
+        try {
+          parsed.roomId = parsed.platform === 'kuaishou'
+            ? await resolveKuaishouRoomId(parsed.url)
+            : await resolveDouyinRoomId(parsed.url);
+        }
         catch (e) {
           // 抖音号本身就是直播间标识, 网页解析不到时直接用输入的抖音号
           if (parsed.fallbackId) parsed.roomId = parsed.fallbackId;
-          else return sendJson(res, 200, { success: false, error: '抖音链接解析失败,请直接输入抖音号或直播间链接' });
+          else return sendJson(res, 200, { success: false, error: '链接解析失败,请直接输入直播间链接或用户ID' });
         }
       }
       const subs = store.getSubs(userId);
@@ -1374,10 +1460,22 @@ function startLiveChecker() {
       if (r2.some(function (r) { return r.platform === 'bilibili'; })) checkRooms('bilibili');
     }, BILI_POLL_INTERVAL);
   }
+  // 快手线: 独立轮询, 页面服务端渲染检测快
+  if (!kuaishouTimer) {
+    const roomsK = store.getAllSubsGroupedByRoom();
+    if (roomsK.some(function (r) { return r.platform === 'kuaishou'; })) {
+      setTimeout(function () { checkRooms('kuaishou'); }, 2000);
+    }
+    kuaishouTimer = setInterval(function () {
+      const r2 = store.getAllSubsGroupedByRoom();
+      if (r2.some(function (r) { return r.platform === 'kuaishou'; })) checkRooms('kuaishou');
+    }, KUAISHOU_POLL_INTERVAL);
+  }
 }
 function stopLiveChecker() {
   if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
   if (biliTimer) { clearInterval(biliTimer); biliTimer = null; }
+  if (kuaishouTimer) { clearInterval(kuaishouTimer); kuaishouTimer = null; }
 }
 
 function startWeiboChecker() {
