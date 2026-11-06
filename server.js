@@ -572,9 +572,9 @@ const checkProgress = { running: false, total: 0, done: 0 };
 // 防止抖音风控页/残缺页被误解析成 status:0, 导致状态来回翻转、开播通知重复推送。
 const offlineConfirm = {};
 
-async function checkRooms(platform, onProgress) {
-  if (checkingFlags[platform]) return;
-  checkingFlags[platform] = true;
+async function checkRooms(platform, onProgress, force) {
+  if (!force && checkingFlags[platform]) return;
+  if (!force) checkingFlags[platform] = true;
   try {
     const all = store.getAllSubsGroupedByRoom();
     const rooms = all.filter(function (r) { return r.platform === platform; });
@@ -695,16 +695,16 @@ async function checkRooms(platform, onProgress) {
     // 只在状态真有变化时才通知前端刷新, 避免B站高频轮询导致页面频繁重绘
     if (anyChanged) broadcastAll('live-subs-updated', {});
   } finally {
-    checkingFlags[platform] = false;
+    if (!force) checkingFlags[platform] = false;
   }
 }
 
 // 手动"立即检查"和兼容旧调用: 两个平台并行跑,互不阻塞
-function checkAllLive(onProgress) {
+function checkAllLive(onProgress, force) {
   return Promise.all([
-    checkRooms('douyin', onProgress),
-    checkRooms('bilibili', onProgress),
-    checkRooms('kuaishou', onProgress)
+    checkRooms('douyin', onProgress, force),
+    checkRooms('bilibili', onProgress, force),
+    checkRooms('kuaishou', onProgress, force)
   ]);
 }
 
@@ -1289,7 +1289,7 @@ function handleApi(req, res, pathname) {
     checkProgress.running = true;
     checkProgress.total = total || 1;
     checkProgress.done = 0;
-    checkAllLive(function () { checkProgress.done++; }).then(function () {
+    checkAllLive(function () { checkProgress.done++; }, true).then(function () {
       checkProgress.done = checkProgress.total;
       checkProgress.running = false;
     }).catch(function () { checkProgress.running = false; });
