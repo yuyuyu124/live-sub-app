@@ -566,11 +566,13 @@ async function checkOneRoom(platform, roomId) {
 //   拆开后两条线各自独立跑, B站20秒一轮、抖音60秒一轮。
 // ============================================================
 const checkingFlags = { douyin: false, bilibili: false, kuaishou: false };
+// 手动"立即检查"的进度(供前端进度条轮询)
+const checkProgress = { running: false, total: 0, done: 0 };
 // 下播确认计数(房间维度): 直播中突然检出"下播"时, 连续2轮都为0才确认真下播。
 // 防止抖音风控页/残缺页被误解析成 status:0, 导致状态来回翻转、开播通知重复推送。
 const offlineConfirm = {};
 
-async function checkRooms(platform) {
+async function checkRooms(platform, onProgress) {
   if (checkingFlags[platform]) return;
   checkingFlags[platform] = true;
   try {
@@ -585,6 +587,7 @@ async function checkRooms(platform) {
     for (let i = 0; i < rooms.length; i++) {
       const room = rooms[i];
       const info = await checkOneRoom(room.platform, room.roomId);
+      if (onProgress) onProgress();
       if (!info) {
         if (i < rooms.length - 1) await new Promise(function (r) { setTimeout(r, stagger); });
         continue;
@@ -697,8 +700,12 @@ async function checkRooms(platform) {
 }
 
 // 手动"立即检查"和兼容旧调用: 两个平台并行跑,互不阻塞
-function checkAllLive() {
-  return Promise.all([checkRooms('douyin'), checkRooms('bilibili'), checkRooms('kuaishou')]);
+function checkAllLive(onProgress) {
+  return Promise.all([
+    checkRooms('douyin', onProgress),
+    checkRooms('bilibili', onProgress),
+    checkRooms('kuaishou', onProgress)
+  ]);
 }
 
 // ============================================================
@@ -1270,10 +1277,28 @@ function handleApi(req, res, pathname) {
     });
   }
 
-  // POST /api/check
+  // POST /api/check - 触发一次全量检查(带进度, 前端轮询 /api/check/status)
   if (method === 'POST' && parts[1] === 'check') {
-    checkAllLive();
+    if (checkProgress.running) {
+      return sendJson(res, 200, { success: true, alreadyRunning: true });
+    }
+    const allSubs = store.getAllSubsGroupedByRoom();
+    const total = allSubs.filter(function (r) {
+      return r.platform === 'douyin' || r.platform === 'bilibili' || r.platform === 'kuaishou';
+    }).length;
+    checkProgress.running = true;
+    checkProgress.total = total || 1;
+    checkProgress.done = 0;
+    checkAllLive(function () { checkProgress.done++; }).then(function () {
+      checkProgress.done = checkProgress.total;
+      checkProgress.running = false;
+    }).catch(function () { checkProgress.running = false; });
     return sendJson(res, 200, { success: true });
+  }
+
+  // GET /api/check/status - 查询检查进度
+  if (method === 'GET' && parts[1] === 'check' && parts[2] === 'status') {
+    return sendJson(res, 200, checkProgress);
   }
 
   // GET /api/events (SSE)
