@@ -1100,7 +1100,7 @@ function connectSSE(){
 }
 
 /* ---- 公告横幅 ---- */
-function showAnnouncement(){var key="announcement_20261013";if(localStorage.getItem(key))return;var bar=document.getElementById("announcementBar");if(!bar)return;var ds="2026-10-13";var txt=document.getElementById("announcementText");if(txt)txt.textContent="["+ds+"] 近期更新了置顶订阅、复制直播间链接、点击直播间头像跳转功能，快来体验吧~";bar.style.display="flex";document.getElementById("announcementClose").onclick=function(){bar.style.display="none";localStorage.setItem(key,"1");};}
+function showAnnouncement(){var key="announcement_20261106";if(localStorage.getItem(key))return;var bar=document.getElementById("announcementBar");if(!bar)return;var ds="2026-11-06";var txt=document.getElementById("announcementText");if(txt)txt.textContent="["+ds+"] 新增了快手订阅功能，修复了服务器bug";bar.style.display="flex";document.getElementById("announcementClose").onclick=function(){bar.style.display="none";localStorage.setItem(key,"1");};}
 
 /* ---- 卡密授权 ---- */
 var currentAuth = null;
