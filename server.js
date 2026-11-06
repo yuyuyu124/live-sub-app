@@ -572,9 +572,9 @@ const checkProgress = { running: false, total: 0, done: 0 };
 // 防止抖音风控页/残缺页被误解析成 status:0, 导致状态来回翻转、开播通知重复推送。
 const offlineConfirm = {};
 
-async function checkRooms(platform, onProgress, force) {
-  if (!force && checkingFlags[platform]) return;
-  if (!force) checkingFlags[platform] = true;
+async function checkRooms(platform, onProgress) {
+  if (checkingFlags[platform]) return;
+  checkingFlags[platform] = true;
   try {
     const all = store.getAllSubsGroupedByRoom();
     const rooms = all.filter(function (r) { return r.platform === platform; });
@@ -695,17 +695,31 @@ async function checkRooms(platform, onProgress, force) {
     // 只在状态真有变化时才通知前端刷新, 避免B站高频轮询导致页面频繁重绘
     if (anyChanged) broadcastAll('live-subs-updated', {});
   } finally {
-    if (!force) checkingFlags[platform] = false;
+    checkingFlags[platform] = false;
   }
 }
 
 // 手动"立即检查"和兼容旧调用: 两个平台并行跑,互不阻塞
-function checkAllLive(onProgress, force) {
+function checkAllLive(onProgress) {
   return Promise.all([
-    checkRooms('douyin', onProgress, force),
-    checkRooms('bilibili', onProgress, force),
-    checkRooms('kuaishou', onProgress, force)
+    checkRooms('douyin', onProgress),
+    checkRooms('bilibili', onProgress),
+    checkRooms('kuaishou', onProgress)
   ]);
+}
+
+// 等待某平台空闲(避开定时器正在跑的检测轮), 防止手动"立即检查"与定时器并发触发抖音风控
+function waitIdle(platform, timeoutMs) {
+  return new Promise(function (resolve) {
+    if (!checkingFlags[platform]) { resolve(); return; }
+    var t0 = Date.now();
+    var iv = setInterval(function () {
+      if (!checkingFlags[platform] || Date.now() - t0 > timeoutMs) {
+        clearInterval(iv);
+        resolve();
+      }
+    }, 400);
+  });
 }
 
 // ============================================================
@@ -1289,7 +1303,13 @@ function handleApi(req, res, pathname) {
     checkProgress.running = true;
     checkProgress.total = total || 1;
     checkProgress.done = 0;
-    checkAllLive(function () { checkProgress.done++; }, true).then(function () {
+    Promise.all([
+      waitIdle('douyin', 120000),
+      waitIdle('bilibili', 120000),
+      waitIdle('kuaishou', 120000)
+    ]).then(function () {
+      return checkAllLive(function () { checkProgress.done++; });
+    }).then(function () {
       checkProgress.done = checkProgress.total;
       checkProgress.running = false;
     }).catch(function () { checkProgress.running = false; });
