@@ -517,8 +517,6 @@ async function checkOneRoom(platform, roomId) {
         if (pageResp.body && bodyLen > 1000 && !isRiskPage) {
           room = parseDouyinRoom(pageResp.body);
           console.log('[抖音检测] 解析结果=' + (room ? JSON.stringify({status: room.status, hasTitle: !!room.title}) : 'null'));
-        } else if (isRiskPage) {
-          console.log('[抖音检测] 命中风控页 body前200=' + pageResp.body.substring(0, Math.min(200, bodyLen)));
         }
       }
       // 关键: 拿不到可信状态时返回 null, 上层会跳过本轮、保持原状态。
